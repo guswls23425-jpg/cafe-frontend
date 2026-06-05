@@ -402,11 +402,14 @@ export default function SeatManagementPage() {
       )
       if (floorsRes.ok) { saved = true }
 
-      // 폴백: 현재 층만 구 save API로 저장
+      // 폴백: 전 층 좌석을 floorNumber 포함 flat list로 저장
       if (!saved) {
+        const allSeats = floors.flatMap(f =>
+          f.tables.map(t => ({ ...t, floorNumber: f.id }))
+        )
         const fallbackRes = await fetch(
           `http://34.64.58.23:8080/api/seats/save?cafeName=${encodeURIComponent(cafeName)}`,
-          { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(tables) }
+          { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(allSeats) }
         )
         if (fallbackRes.ok) saved = true
       }
@@ -435,10 +438,13 @@ export default function SeatManagementPage() {
         { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }
       )
       if (!res.ok) {
-        // floors/save 실패 시 구 API 폴백 (현재 층만)
+        // floors/save 실패 시 전 층 flat list로 폴백
+        const allSeats = updatedFloors.flatMap(f =>
+          f.tables.map(t => ({ ...t, floorNumber: f.id }))
+        )
         await fetch(
           `http://34.64.58.23:8080/api/seats/save?cafeName=${encodeURIComponent(cafeName)}`,
-          { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(tables) }
+          { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(allSeats) }
         )
       }
     } catch { /* 네트워크 오류는 무시 — 다음 명시적 저장 시 반영됨 */ }

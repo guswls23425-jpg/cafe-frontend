@@ -33,6 +33,19 @@ interface FloorData {
   tables: TableData[]
 }
 
+// ─── seats flat list → floors 배열로 변환 ────────────────────────────────────
+function groupSeatsByFloor(seats: TableData[]): Array<{ id: number; label: string; tables: TableData[] }> {
+  const map = new Map<number, TableData[]>()
+  for (const seat of seats) {
+    const fn = (seat as TableData & { floorNumber?: number }).floorNumber ?? 1
+    if (!map.has(fn)) map.set(fn, [])
+    map.get(fn)!.push(seat)
+  }
+  return Array.from(map.entries())
+    .sort(([a], [b]) => a - b)
+    .map(([fn, tables]) => ({ id: fn, label: `${fn}층`, tables }))
+}
+
 // ─── 스타일 ───────────────────────────────────────────────────────────────────
 const statusConfig = {
   active:    { bg: "bg-emerald-50", border: "border-emerald-300", label: "사용중",   dot: "bg-emerald-500" },
@@ -154,7 +167,7 @@ export default function GuestPage() {
           if (searchRes.ok) {
             const seats: TableData[] = await searchRes.json()
             if (seats && seats.length > 0) {
-              floorsData = [{ id: 1, label: "1층", tables: seats }]
+              floorsData = groupSeatsByFloor(seats)
             }
           }
         }
@@ -204,7 +217,7 @@ export default function GuestPage() {
         if (searchRes.ok) {
           const seats: TableData[] = await searchRes.json()
           if (seats && seats.length > 0) {
-            floorsData = [{ id: 1, label: "1층", tables: seats }]
+            floorsData = groupSeatsByFloor(seats)
           }
         }
       }
