@@ -415,6 +415,14 @@ export default function SeatManagementPage() {
       }
 
       if (saved) {
+        // 층 구조를 카페명 기반 키로 localStorage에 저장 → 게스트 페이지에서 읽음
+        try {
+          const floorStructure = floors.map(f => ({ id: f.id, label: f.label }))
+          localStorage.setItem(
+            `cafemonitor-floor-structure-${cafeName}`,
+            JSON.stringify(floorStructure)
+          )
+        } catch {}
         alert("🎉 배치 정보가 저장되었습니다!")
       } else {
         alert("🚨 저장 실패: 서버 오류가 발생했습니다.")

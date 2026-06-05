@@ -146,9 +146,15 @@ export default function GuestPage() {
     const fetchSeats = async () => {
       setIsLoading(true)
       try {
-        // 신규 floors API 시도 → 실패하면 구 search API로 폴백
-        let floorsData: Array<{ id: number; label: string; tables: TableData[] }> | null = null
+        // 1) localStorage에서 층 구조 미리 로드 (관리자가 저장한 층 목록)
+        let floorStructure: Array<{ id: number; label: string }> | null = null
+        try {
+          const raw = localStorage.getItem(`cafemonitor-floor-structure-${storedCafeName}`)
+          if (raw) floorStructure = JSON.parse(raw)
+        } catch {}
 
+        // 2) floors API 시도
+        let floorsData: Array<{ id: number; label: string; tables: TableData[] }> | null = null
         const floorsRes = await fetch(
           `http://34.64.58.23:8080/api/seats/floors?cafeName=${encodeURIComponent(storedCafeName)}`
         )
@@ -159,7 +165,7 @@ export default function GuestPage() {
           }
         }
 
-        // floors API 실패 또는 빈 응답 → 구 search API 폴백
+        // 3) floors API 실패 → search API 폴백 + floorNumber로 그룹화
         if (!floorsData) {
           const searchRes = await fetch(
             `http://34.64.58.23:8080/api/seats/search?cafeName=${encodeURIComponent(storedCafeName)}`
@@ -172,7 +178,20 @@ export default function GuestPage() {
           }
         }
 
-        if (floorsData && floorsData.some(f => f.tables.length > 0)) {
+        // 4) localStorage 층 구조와 병합
+        //    → localStorage에 있는 층은 모두 표시, 좌석 데이터는 서버에서 채움
+        if (floorStructure && floorStructure.length > 0) {
+          const seatMap = new Map<number, TableData[]>(
+            (floorsData ?? []).map(f => [f.id, f.tables])
+          )
+          floorsData = floorStructure.map(f => ({
+            id: f.id,
+            label: f.label,
+            tables: seatMap.get(f.id) ?? [],
+          }))
+        }
+
+        if (floorsData && floorsData.length > 0) {
           setFloors(floorsData)
           setActiveFloorId(floorsData[0].id)
         } else {
@@ -209,7 +228,7 @@ export default function GuestPage() {
         }
       }
 
-      // 폴백
+      // 폴백: search API + floorNumber 그룹화
       if (!floorsData) {
         const searchRes = await fetch(
           `http://34.64.58.23:8080/api/seats/search?cafeName=${encodeURIComponent(inputName)}`
@@ -222,7 +241,23 @@ export default function GuestPage() {
         }
       }
 
-      if (floorsData && floorsData.some(f => f.tables.length > 0)) {
+      // localStorage 층 구조와 병합
+      try {
+        const raw = localStorage.getItem(`cafemonitor-floor-structure-${inputName}`)
+        if (raw) {
+          const floorStructure: Array<{ id: number; label: string }> = JSON.parse(raw)
+          const seatMap = new Map<number, TableData[]>(
+            (floorsData ?? []).map(f => [f.id, f.tables])
+          )
+          floorsData = floorStructure.map(f => ({
+            id: f.id,
+            label: f.label,
+            tables: seatMap.get(f.id) ?? [],
+          }))
+        }
+      } catch {}
+
+      if (floorsData && floorsData.length > 0) {
         sessionStorage.setItem("guestCafeName", inputName)
         setCafeName(inputName)
         setFloors(floorsData)
