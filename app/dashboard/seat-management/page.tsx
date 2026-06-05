@@ -300,22 +300,41 @@ export default function SeatManagementPage() {
     const fetchAllFloors = async () => {
       setIsLoading(true)
       try {
-        const response = await fetch(
+        let loaded: FloorData[] | null = null
+
+        // 신규 floors API 시도
+        const floorsRes = await fetch(
           `http://34.64.58.23:8080/api/seats/floors?cafeName=${encodeURIComponent(cafeName)}`
         )
-        if (response.ok) {
-          const data: Array<{ floorNumber: number; label: string; seats: TableData[] }> = await response.json()
+        if (floorsRes.ok) {
+          const data: Array<{ floorNumber: number; label: string; seats: TableData[] }> = await floorsRes.json()
           if (data && data.length > 0) {
-            const loaded: FloorData[] = data.map((f) => ({
+            loaded = data.map(f => ({
               id: f.floorNumber,
               label: f.label,
               tables: f.seats ?? [],
               tableCount: (f.seats ?? []).length,
             }))
-            setFloors(loaded)
-            setActiveFloorId(loaded[0].id)
-            setNextFloorId(Math.max(...loaded.map(f => f.id)) + 1)
           }
+        }
+
+        // 폴백: 구 search API
+        if (!loaded) {
+          const searchRes = await fetch(
+            `http://34.64.58.23:8080/api/seats/search?cafeName=${encodeURIComponent(cafeName)}`
+          )
+          if (searchRes.ok) {
+            const seats: TableData[] = await searchRes.json()
+            if (seats && seats.length > 0) {
+              loaded = [{ id: 1, label: "1층", tables: seats, tableCount: seats.length }]
+            }
+          }
+        }
+
+        if (loaded) {
+          setFloors(loaded)
+          setActiveFloorId(loaded[0].id)
+          setNextFloorId(Math.max(...loaded.map(f => f.id)) + 1)
         }
       } catch {
         // 연결 실패 시 초기값(1층) 유지
@@ -326,7 +345,7 @@ export default function SeatManagementPage() {
     fetchAllFloors()
   }, [cafeName])
 
-  // ── [3] 저장 (전 층 한꺼번에) ────────────────────────────────────────────
+  // ── [3] 저장 (신규 floors API → 폴백: 구 save API) ──────────────────────
   const handleSaveChanges = async () => {
     try {
       const body = floors.map(f => ({
@@ -334,11 +353,25 @@ export default function SeatManagementPage() {
         label: f.label,
         seats: f.tables,
       }))
-      const response = await fetch(
+
+      // 신규 floors/save 시도
+      let saved = false
+      const floorsRes = await fetch(
         `http://34.64.58.23:8080/api/seats/floors/save?cafeName=${encodeURIComponent(cafeName)}`,
         { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }
       )
-      if (response.ok) alert("🎉 전 층 배치 정보가 저장되었습니다!")
+      if (floorsRes.ok) { saved = true }
+
+      // 폴백: 현재 층만 구 save API로 저장
+      if (!saved) {
+        const fallbackRes = await fetch(
+          `http://34.64.58.23:8080/api/seats/save?cafeName=${encodeURIComponent(cafeName)}`,
+          { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(tables) }
+        )
+        if (fallbackRes.ok) saved = true
+      }
+
+      if (saved) alert("🎉 배치 정보가 저장되었습니다!")
       else alert("🚨 저장 실패: 서버 오류가 발생했습니다.")
     } catch {
       alert("🚨 서버와 연결할 수 없습니다.")

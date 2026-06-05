@@ -133,22 +133,39 @@ export default function GuestPage() {
     const fetchSeats = async () => {
       setIsLoading(true)
       try {
-        const response = await fetch(
+        // 신규 floors API 시도 → 실패하면 구 search API로 폴백
+        let floorsData: Array<{ id: number; label: string; tables: TableData[] }> | null = null
+
+        const floorsRes = await fetch(
           `http://34.64.58.23:8080/api/seats/floors?cafeName=${encodeURIComponent(storedCafeName)}`
         )
-        if (response.ok) {
-          const data: Array<{ floorNumber: number; label: string; seats: TableData[] }> = await response.json()
-          if (data && data.length > 0) {
-            setFloors(data.map(f => ({ id: f.floorNumber, label: f.label, tables: f.seats ?? [] })))
-            setActiveFloorId(data[0].floorNumber)
-          } else {
-            sessionStorage.removeItem("guestCafeName")
-            setShowInput(true)
-            alert("카페 정보를 찾을 수 없습니다. 다시 입력해주세요.")
+        if (floorsRes.ok) {
+          const raw: Array<{ floorNumber: number; label: string; seats: TableData[] }> = await floorsRes.json()
+          if (raw && raw.length > 0) {
+            floorsData = raw.map(f => ({ id: f.floorNumber, label: f.label, tables: f.seats ?? [] }))
           }
+        }
+
+        // floors API 실패 또는 빈 응답 → 구 search API 폴백
+        if (!floorsData) {
+          const searchRes = await fetch(
+            `http://34.64.58.23:8080/api/seats/search?cafeName=${encodeURIComponent(storedCafeName)}`
+          )
+          if (searchRes.ok) {
+            const seats: TableData[] = await searchRes.json()
+            if (seats && seats.length > 0) {
+              floorsData = [{ id: 1, label: "1층", tables: seats }]
+            }
+          }
+        }
+
+        if (floorsData && floorsData.some(f => f.tables.length > 0)) {
+          setFloors(floorsData)
+          setActiveFloorId(floorsData[0].id)
         } else {
           sessionStorage.removeItem("guestCafeName")
           setShowInput(true)
+          alert("카페 정보를 찾을 수 없습니다. 다시 입력해주세요.")
         }
       } catch {
         sessionStorage.removeItem("guestCafeName")
@@ -167,20 +184,39 @@ export default function GuestPage() {
     if (!inputName) return
     setIsLoading(true)
     try {
-      const response = await fetch(
+      let floorsData: Array<{ id: number; label: string; tables: TableData[] }> | null = null
+
+      const floorsRes = await fetch(
         `http://34.64.58.23:8080/api/seats/floors?cafeName=${encodeURIComponent(inputName)}`
       )
-      if (response.ok) {
-        const data: Array<{ floorNumber: number; label: string; seats: TableData[] }> = await response.json()
-        if (data && data.length > 0 && data.some(f => (f.seats ?? []).length > 0)) {
-          sessionStorage.setItem("guestCafeName", inputName)
-          setCafeName(inputName)
-          setFloors(data.map(f => ({ id: f.floorNumber, label: f.label, tables: f.seats ?? [] })))
-          setActiveFloorId(data[0].floorNumber)
-          setShowInput(false)
-        } else {
-          alert("🚨 등록되지 않은 카페이거나, 아직 좌석 배치가 완료되지 않았습니다.\n카페 이름을 다시 확인해주세요!")
+      if (floorsRes.ok) {
+        const raw: Array<{ floorNumber: number; label: string; seats: TableData[] }> = await floorsRes.json()
+        if (raw && raw.length > 0) {
+          floorsData = raw.map(f => ({ id: f.floorNumber, label: f.label, tables: f.seats ?? [] }))
         }
+      }
+
+      // 폴백
+      if (!floorsData) {
+        const searchRes = await fetch(
+          `http://34.64.58.23:8080/api/seats/search?cafeName=${encodeURIComponent(inputName)}`
+        )
+        if (searchRes.ok) {
+          const seats: TableData[] = await searchRes.json()
+          if (seats && seats.length > 0) {
+            floorsData = [{ id: 1, label: "1층", tables: seats }]
+          }
+        }
+      }
+
+      if (floorsData && floorsData.some(f => f.tables.length > 0)) {
+        sessionStorage.setItem("guestCafeName", inputName)
+        setCafeName(inputName)
+        setFloors(floorsData)
+        setActiveFloorId(floorsData[0].id)
+        setShowInput(false)
+      } else {
+        alert("🚨 등록되지 않은 카페이거나, 아직 좌석 배치가 완료되지 않았습니다.\n카페 이름을 다시 확인해주세요!")
       }
     } catch {
       alert("🚨 서버와 연결할 수 없습니다.")
