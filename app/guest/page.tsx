@@ -1,132 +1,195 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
-import { Coffee, ArrowLeft, Store, ArrowRight, Loader2 } from "lucide-react" // 💡 Loader2 추가
+import { Coffee, ArrowLeft, Store, ArrowRight, Loader2, Building2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import Link from "next/link"
 
-const TABLE_WIDTH = 120
-const TABLE_HEIGHT = 100
+// ─── 상수 (seat-management와 동일) ────────────────────────────────────────────
+const TABLE_WIDTH       = 120
+const TABLE_HEIGHT      = 100
+const ICON_SIZE         = Math.round(TABLE_WIDTH / 6) // 20px
+const PERSON_ROW_HEIGHT = ICON_SIZE + 16
+const TOTAL_HEIGHT      = TABLE_HEIGHT + PERSON_ROW_HEIGHT
 
+// ─── 타입 ─────────────────────────────────────────────────────────────────────
 type TableStatus = "active" | "away" | "available"
 
-// ✨ 백엔드 DB 구조(posX, posY)에 맞게 인터페이스 수정
 interface TableData {
   id: number
   name: string
   status: TableStatus
   awayTime?: string
-  posX: number // 💡 position.x 대신 직접 posX로 받음
-  posY: number // 💡 position.y 대신 직접 posY로 받음
+  posX: number
+  posY: number
+  personCount: number
 }
 
+interface FloorData {
+  id: number
+  label: string
+  tables: TableData[]
+}
+
+// ─── 스타일 ───────────────────────────────────────────────────────────────────
 const statusConfig = {
-  active: {
-    bg: "bg-emerald-50",
-    border: "border-emerald-300",
-    label: "사용중",
-    dot: "bg-emerald-500",
-  },
-  away: {
-    bg: "bg-yellow-50",
-    border: "border-yellow-300",
-    label: "자리비움",
-    dot: "bg-yellow-500",
-  },
-  available: {
-    bg: "bg-gray-50",
-    border: "border-gray-200",
-    label: "이용가능",
-    dot: "bg-gray-400",
-  },
+  active:    { bg: "bg-emerald-50", border: "border-emerald-300", label: "사용중",   dot: "bg-emerald-500" },
+  away:      { bg: "bg-yellow-50",  border: "border-yellow-300",  label: "자리비움", dot: "bg-yellow-500"  },
+  available: { bg: "bg-gray-50",    border: "border-gray-200",    label: "이용가능", dot: "bg-gray-400"    },
 }
 
+// ─── 사람 아이콘 (읽기 전용) ──────────────────────────────────────────────────
+function PersonIcon({ size, filled }: { size: number; filled: boolean }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24"
+      className={filled ? "text-gray-800" : "text-gray-300"}>
+      <circle cx="12" cy="7" r="4.5" fill="currentColor" />
+      <path d="M3 22c0-5 4-9 9-9s9 4 9 9" fill="currentColor" clipPath="inset(0 0 2px 0)" />
+    </svg>
+  )
+}
+
+// ─── 테이블 카드 (읽기 전용) ──────────────────────────────────────────────────
+function TableCard({ table }: { table: TableData }) {
+  const statusKey = (table.status?.toLowerCase() || "available") as TableStatus
+  const config = statusConfig[statusKey] || statusConfig.available
+  const isWarning = statusKey === "away" && table.awayTime && parseInt(table.awayTime.split(":")[0]) >= 5
+
+  return (
+    <div
+      style={{
+        position: "absolute",
+        left: table.posX ?? 0,
+        top: table.posY ?? 0,
+        width: TABLE_WIDTH,
+        height: TOTAL_HEIGHT,
+      }}
+    >
+      <div
+        className={`flex flex-col overflow-hidden rounded-xl border ${config.bg} ${config.border}`}
+        style={{ height: TOTAL_HEIGHT }}
+      >
+        {/* 테이블 정보 */}
+        <div className="relative flex flex-1 flex-col items-center justify-center px-3 text-center">
+          <div className="absolute right-2 top-2">
+            <span className={`inline-block h-2 w-2 rounded-full ${config.dot}`} />
+          </div>
+          <div className="text-sm font-semibold text-gray-900">{table.name}</div>
+          <div className="mt-0.5 text-xs text-gray-500">{config.label}</div>
+          {table.awayTime && (
+            <div className={`mt-0.5 text-xs font-medium ${isWarning ? "text-red-500" : "text-yellow-600"}`}>
+              {table.awayTime}
+            </div>
+          )}
+        </div>
+
+        {/* 구분선 */}
+        <div className={`h-px w-full border-t ${config.border}`} />
+
+        {/* 인원 아이콘 (읽기 전용) */}
+        <div
+          className="flex items-center justify-center gap-0.5 bg-white/60 px-2"
+          style={{ height: PERSON_ROW_HEIGHT }}
+        >
+          {Array.from({ length: 4 }).map((_, i) => (
+            <PersonIcon key={i} size={ICON_SIZE} filled={i < (table.personCount ?? 0)} />
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── 메인 ─────────────────────────────────────────────────────────────────────
 export default function GuestPage() {
-  const router = useRouter()
   const [cafeName, setCafeName] = useState("")
   const [inputValue, setInputValue] = useState("")
   const [showInput, setShowInput] = useState(false)
-  const [tables, setTables] = useState<TableData[]>([]) 
-  const [isLoading, setIsLoading] = useState(true) // 🟢 주석 해제하여 로딩 상태 활성화!
+  const [isLoading, setIsLoading] = useState(true)
 
-  const availableCount = tables.filter((t) => t.status === "available").length
-  const activeCount = tables.filter((t) => t.status === "active").length
-  const awayCount = tables.filter((t) => t.status === "away").length
+  // 층 상태
+  const [floors, setFloors] = useState<FloorData[]>([])
+  const [activeFloorId, setActiveFloorId] = useState<number>(1)
 
+  const currentFloor = floors.find(f => f.id === activeFloorId) ?? floors[0]
+  const tables = currentFloor?.tables ?? []
+
+  const availableCount = tables.filter(t => t.status === "available").length
+  const activeCount    = tables.filter(t => t.status === "active").length
+  const awayCount      = tables.filter(t => t.status === "away").length
+
+  // ── 초기 로딩 ───────────────────────────────────────────────────────────
   useEffect(() => {
     const storedCafeName = sessionStorage.getItem("guestCafeName")
     if (!storedCafeName) {
       setShowInput(true)
-      setIsLoading(false) // 입력창을 띄워줄 때는 대기 로딩을 끈다
+      setIsLoading(false)
       return
     }
     setCafeName(storedCafeName)
 
     const fetchSeats = async () => {
-      setIsLoading(true) // 🟢 조회 시작 시 로딩 ON
+      setIsLoading(true)
       try {
-        const response = await fetch(`http://34.64.58.23:8080/api/seats/search?cafeName=${encodeURIComponent(storedCafeName)}`);
-        
+        const response = await fetch(
+          `http://34.64.58.23:8080/api/seats/search?cafeName=${encodeURIComponent(storedCafeName)}`
+        )
         if (response.ok) {
-          const data = await response.json();
+          const data = await response.json()
           if (data && data.length > 0) {
-            setTables(data);
+            setFloors([{ id: 1, label: "1층", tables: data }])
+            setActiveFloorId(1)
           } else {
-            sessionStorage.removeItem("guestCafeName");
-            setShowInput(true);
-            alert("카페 정보를 찾을 수 없습니다. 다시 입력해주세요.");
+            sessionStorage.removeItem("guestCafeName")
+            setShowInput(true)
+            alert("카페 정보를 찾을 수 없습니다. 다시 입력해주세요.")
           }
         } else {
-          console.error("좌석 조회 실패 HTTP", response.status);
-          sessionStorage.removeItem("guestCafeName");
-          setShowInput(true);
+          sessionStorage.removeItem("guestCafeName")
+          setShowInput(true)
         }
-      } catch (error) {
-        console.error("서버 연결 실패:", error);
-        sessionStorage.removeItem("guestCafeName");
-        setShowInput(true);
+      } catch {
+        sessionStorage.removeItem("guestCafeName")
+        setShowInput(true)
       } finally {
-        setIsLoading(false) // 🟢 성공하든 실패하든 로딩 OFF
+        setIsLoading(false)
       }
-    };
+    }
+    fetchSeats()
+  }, [])
 
-    fetchSeats();
-  }, []);
-
+  // ── 카페명 검색 ──────────────────────────────────────────────────────────
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     const inputName = inputValue.trim()
-    
     if (!inputName) return
-    setIsLoading(true) // 검색 시에도 로딩 처리
-
+    setIsLoading(true)
     try {
-      const response = await fetch(`http://34.64.58.23:8080/api/seats/search?cafeName=${encodeURIComponent(inputName)}`);
-      
+      const response = await fetch(
+        `http://34.64.58.23:8080/api/seats/search?cafeName=${encodeURIComponent(inputName)}`
+      )
       if (response.ok) {
-        const data = await response.json();
-        
+        const data = await response.json()
         if (data && data.length > 0) {
           sessionStorage.setItem("guestCafeName", inputName)
           setCafeName(inputName)
-          setTables(data) 
+          setFloors([{ id: 1, label: "1층", tables: data }])
+          setActiveFloorId(1)
           setShowInput(false)
         } else {
-          alert("🚨 등록되지 않은 카페이거나, 아직 좌석 배치가 완료되지 않았습니다.\n카페 이름을 다시 확인해주세요!");
+          alert("🚨 등록되지 않은 카페이거나, 아직 좌석 배치가 완료되지 않았습니다.\n카페 이름을 다시 확인해주세요!")
         }
       }
-    } catch (error) {
-      console.error("카페 확인 에러:", error);
-      alert("🚨 서버와 연결할 수 없습니다.");
+    } catch {
+      alert("🚨 서버와 연결할 수 없습니다.")
     } finally {
       setIsLoading(false)
     }
   }
 
-  // 🟢 1단계 방어선: 카페 이름 입력창 우선 렌더링
+  // ── 카페명 입력 화면 ─────────────────────────────────────────────────────
   if (showInput) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
@@ -151,41 +214,37 @@ export default function GuestPage() {
                 />
               </div>
             </div>
-            <Button
-              type="submit"
-              className="w-full bg-emerald-600 text-white hover:bg-emerald-700"
-              disabled={!inputValue.trim() || isLoading}
-            >
-              {isLoading ? "조회 중..." : "좌석 현황 보기"} <ArrowRight className="ml-2 h-4 w-4" />
+            <Button type="submit" className="w-full bg-emerald-600 text-white hover:bg-emerald-700"
+              disabled={!inputValue.trim() || isLoading}>
+              {isLoading ? "조회 중..." : "좌석 현황 보기"}
+              <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
           </form>
           <div className="mt-4 text-center text-sm text-gray-500">
             관리자이신가요?{" "}
-            <Link href="/login" className="text-emerald-500 hover:text-emerald-600">
-              로그인하기
-            </Link>
+            <Link href="/login" className="text-emerald-500 hover:text-emerald-600">로그인하기</Link>
           </div>
         </div>
       </div>
     )
   }
 
+  // ── 로딩 화면 ────────────────────────────────────────────────────────────
   if (isLoading) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-gray-50 text-gray-700">
+      <div className="flex min-h-screen flex-col items-center justify-center bg-gray-50">
         <Loader2 className="h-10 w-10 animate-spin text-emerald-500" />
-        <p className="mt-4 text-gray-500 text-sm">실시간 좌석 배치도를 불러오는 중...</p>
+        <p className="mt-4 text-sm text-gray-500">실시간 좌석 배치도를 불러오는 중...</p>
       </div>
     )
   }
 
-  if (!cafeName) {
-    return null
-  }
+  if (!cafeName) return null
 
+  // ── 메인 화면 ────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900">
-      {/* Header */}
+      {/* 헤더 */}
       <header className="sticky top-0 z-50 border-b border-gray-200 bg-white/80 backdrop-blur-sm">
         <div className="mx-auto flex h-16 max-w-5xl items-center justify-between px-4">
           <div className="flex items-center gap-3">
@@ -206,7 +265,7 @@ export default function GuestPage() {
       </header>
 
       <main className="mx-auto max-w-5xl px-4 py-8">
-        {/* Stats Summary */}
+        {/* 통계 요약 (현재 층 기준) */}
         <div className="mb-8 grid grid-cols-3 gap-4">
           <div className="rounded-xl border border-emerald-300 bg-emerald-50 p-4 text-center">
             <div className="text-3xl font-bold text-emerald-500">{availableCount}</div>
@@ -222,65 +281,58 @@ export default function GuestPage() {
           </div>
         </div>
 
-        {/* Legend */}
-        <div className="mb-6 flex flex-wrap items-center gap-4">
+        {/* 범례 */}
+        <div className="mb-4 flex flex-wrap items-center gap-4">
           <span className="text-sm text-gray-500">범례:</span>
-          <div className="flex items-center gap-2">
-            <span className="h-3 w-3 rounded-full bg-emerald-500" />
-            <span className="text-sm text-gray-700">사용중</span>
+          {[
+            { color: "bg-emerald-500", label: "사용중" },
+            { color: "bg-yellow-500",  label: "자리비움" },
+            { color: "bg-gray-400",    label: "이용가능" },
+          ].map(({ color, label }) => (
+            <div key={label} className="flex items-center gap-2">
+              <span className={`h-3 w-3 rounded-full ${color}`} />
+              <span className="text-sm text-gray-700">{label}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* 층 탭 (읽기 전용) */}
+        {floors.length > 1 && (
+          <div className="mb-4 flex flex-wrap items-center gap-2">
+            {floors.map((floor) => {
+              const isActive = activeFloorId === floor.id
+              return (
+                <button
+                  key={floor.id}
+                  type="button"
+                  onClick={() => setActiveFloorId(floor.id)}
+                  className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-medium transition-colors ${
+                    isActive
+                      ? "border-emerald-500 bg-white text-emerald-600"
+                      : "border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:text-gray-700"
+                  }`}
+                >
+                  <Building2 className={`h-3.5 w-3.5 shrink-0 ${isActive ? "text-emerald-500" : "text-gray-400"}`} />
+                  {floor.label}
+                </button>
+              )
+            })}
           </div>
-          <div className="flex items-center gap-2">
-            <span className="h-3 w-3 rounded-full bg-yellow-500" />
-            <span className="text-sm text-gray-700">자리비움</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="h-3 w-3 rounded-full bg-gray-400" />
-            <span className="text-sm text-gray-700">이용가능</span>
+        )}
+
+        {/* 배치도 캔버스 (읽기 전용 + 스크롤) */}
+        <div className="h-[500px] overflow-auto rounded-xl border border-gray-200">
+          <div
+            className="relative bg-gray-100/50"
+            style={{ width: 1200, height: 900 }}
+          >
+            {tables.map((table) => (
+              <TableCard key={table.id} table={table} />
+            ))}
           </div>
         </div>
 
-        {/* Table Canvas View (Read-Only) */}
-        <div className="relative min-h-[500px] w-full overflow-auto rounded-xl border border-gray-200 bg-gray-100/50">
-          {tables.map((table) => {
-            // 💡 범례 방어선 설정 (혹시 다 대문자로 오거나 빈 값이 와도 에러 안 나게 처리)
-            const statusKey = (table.status?.toLowerCase() || "available") as TableStatus
-            const config = statusConfig[statusKey] || statusConfig.available
-            const isWarning = statusKey === "away" && table.awayTime && parseInt(table.awayTime.split(":")[0]) >= 5
-
-            return (
-              <div
-                key={table.id}
-                // ✨ 중요: 백엔드 변수 구조명(table.posX, table.posY)으로 직접 스타일 매핑!
-                style={{
-                  position: "absolute",
-                  left: table.posX ?? 0,
-                  top: table.posY ?? 0,
-                  width: TABLE_WIDTH,
-                  height: TABLE_HEIGHT,
-                }}
-                className={`rounded-xl border p-3 transition-colors ${config.bg} ${config.border}`}
-              >
-                {/* 우측 상단 상태 점 */}
-                <div className="absolute right-2 top-2">
-                  <span className={`inline-block h-2 w-2 rounded-full ${config.dot}`} />
-                </div>
-                
-                {/* 중앙 텍스트 정보 */}
-                <div className="flex h-full flex-col items-center justify-center text-center">
-                  <div className="text-sm font-semibold text-gray-900">{table.name}</div>
-                  <div className="mt-1 text-xs text-gray-500">{config.label}</div>
-                  {table.awayTime && (
-                    <div className={`mt-1 text-xs font-medium ${isWarning ? "text-red-500" : "text-yellow-600"}`}>
-                      {table.awayTime}
-                    </div>
-                  )}
-                </div>
-              </div>
-            )
-          })}
-        </div>
-
-        {/* Info */}
+        {/* 안내 */}
         <div className="mt-8 rounded-xl border border-gray-200 bg-white p-4 text-center text-sm text-gray-500 shadow-sm">
           <p>실시간 좌석 현황은 AI가 자동으로 업데이트합니다.</p>
           <p className="mt-1">자리비움 상태의 좌석은 곧 이용 가능할 수 있습니다.</p>
