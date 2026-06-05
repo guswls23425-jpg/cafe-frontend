@@ -498,36 +498,30 @@ export default function SeatManagementPage() {
                 {floors.map((floor) => {
                   const isActive = activeFloorId === floor.id
                   return (
-                    <div key={floor.id} className="flex items-center">
-                      {/* 층 선택 pill — 전체가 클릭 영역 */}
-                      <button
-                        type="button"
-                        onClick={() => setActiveFloorId(floor.id)}
-                        className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-medium transition-colors ${
-                          isActive
-                            ? "border-emerald-500 bg-white text-emerald-600"
-                            : "border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:text-gray-700"
-                        }`}
-                      >
-                        <Building2 className={`h-3.5 w-3.5 shrink-0 ${isActive ? "text-emerald-500" : "text-gray-400"}`} />
-                        {floor.label}
-                      </button>
-
-                      {/* X 버튼 — pill 바깥에 분리 */}
+                    <button
+                      key={floor.id}
+                      type="button"
+                      onClick={() => setActiveFloorId(floor.id)}
+                      className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-medium transition-colors ${
+                        isActive
+                          ? "border-emerald-500 bg-white text-emerald-600"
+                          : "border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:text-gray-700"
+                      }`}
+                    >
+                      <Building2 className={`h-3.5 w-3.5 shrink-0 ${isActive ? "text-emerald-500" : "text-gray-400"}`} />
+                      {floor.label}
                       {floors.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => removeFloor(floor.id)}
-                          className={`-ml-1 flex h-4 w-4 items-center justify-center rounded-full transition-colors ${
-                            isActive
-                              ? "text-emerald-400 hover:bg-emerald-100 hover:text-emerald-600"
-                              : "text-gray-300 hover:bg-gray-100 hover:text-gray-500"
+                        <span
+                          role="button"
+                          onClick={(e) => { e.stopPropagation(); removeFloor(floor.id) }}
+                          className={`flex h-4 w-4 items-center justify-center rounded-full transition-colors ${
+                            isActive ? "hover:bg-emerald-100" : "hover:bg-gray-100"
                           }`}
                         >
                           <X className="h-2.5 w-2.5" />
-                        </button>
+                        </span>
                       )}
-                    </div>
+                    </button>
                   )
                 })}
 
