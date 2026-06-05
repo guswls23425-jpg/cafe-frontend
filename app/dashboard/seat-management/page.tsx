@@ -300,18 +300,25 @@ export default function SeatManagementPage() {
     const fetchAllFloors = async () => {
       setIsLoading(true)
       try {
-        // 층 1 데이터를 기본으로 로드 (백엔드가 층 개념 지원 시 확장 가능)
         const response = await fetch(
-          `http://34.64.58.23:8080/api/seats/search?cafeName=${encodeURIComponent(cafeName)}`
+          `http://34.64.58.23:8080/api/seats/floors?cafeName=${encodeURIComponent(cafeName)}`
         )
         if (response.ok) {
-          const data = await response.json()
+          const data: Array<{ floorNumber: number; label: string; seats: TableData[] }> = await response.json()
           if (data && data.length > 0) {
-            setFloors([{ id: 1, label: "1층", tables: data, tableCount: data.length }])
+            const loaded: FloorData[] = data.map((f) => ({
+              id: f.floorNumber,
+              label: f.label,
+              tables: f.seats ?? [],
+              tableCount: (f.seats ?? []).length,
+            }))
+            setFloors(loaded)
+            setActiveFloorId(loaded[0].id)
+            setNextFloorId(Math.max(...loaded.map(f => f.id)) + 1)
           }
         }
       } catch {
-        // 연결 실패 시 초기값 유지
+        // 연결 실패 시 초기값(1층) 유지
       } finally {
         setIsLoading(false)
       }
@@ -319,14 +326,19 @@ export default function SeatManagementPage() {
     fetchAllFloors()
   }, [cafeName])
 
-  // ── [3] 저장 ──────────────────────────────────────────────────────────────
+  // ── [3] 저장 (전 층 한꺼번에) ────────────────────────────────────────────
   const handleSaveChanges = async () => {
     try {
+      const body = floors.map(f => ({
+        floorNumber: f.id,
+        label: f.label,
+        seats: f.tables,
+      }))
       const response = await fetch(
-        `http://34.64.58.23:8080/api/seats/save?cafeName=${encodeURIComponent(cafeName)}`,
-        { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(tables) }
+        `http://34.64.58.23:8080/api/seats/floors/save?cafeName=${encodeURIComponent(cafeName)}`,
+        { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }
       )
-      if (response.ok) alert("🎉 배치 정보가 저장되었습니다!")
+      if (response.ok) alert("🎉 전 층 배치 정보가 저장되었습니다!")
       else alert("🚨 저장 실패: 서버 오류가 발생했습니다.")
     } catch {
       alert("🚨 서버와 연결할 수 없습니다.")
@@ -510,7 +522,8 @@ export default function SeatManagementPage() {
                     >
                       <Building2 className={`h-3.5 w-3.5 shrink-0 ${isActive ? "text-emerald-500" : "text-gray-400"}`} />
                       {floor.label}
-                      {floors.length > 1 && (
+                      {/* 1층(id=1)은 삭제 불가 */}
+                      {floor.id !== 1 && (
                         <span
                           role="button"
                           onClick={(e) => { e.stopPropagation(); removeFloor(floor.id) }}

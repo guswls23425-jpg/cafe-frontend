@@ -134,13 +134,13 @@ export default function GuestPage() {
       setIsLoading(true)
       try {
         const response = await fetch(
-          `http://34.64.58.23:8080/api/seats/search?cafeName=${encodeURIComponent(storedCafeName)}`
+          `http://34.64.58.23:8080/api/seats/floors?cafeName=${encodeURIComponent(storedCafeName)}`
         )
         if (response.ok) {
-          const data = await response.json()
+          const data: Array<{ floorNumber: number; label: string; seats: TableData[] }> = await response.json()
           if (data && data.length > 0) {
-            setFloors([{ id: 1, label: "1층", tables: data }])
-            setActiveFloorId(1)
+            setFloors(data.map(f => ({ id: f.floorNumber, label: f.label, tables: f.seats ?? [] })))
+            setActiveFloorId(data[0].floorNumber)
           } else {
             sessionStorage.removeItem("guestCafeName")
             setShowInput(true)
@@ -168,15 +168,15 @@ export default function GuestPage() {
     setIsLoading(true)
     try {
       const response = await fetch(
-        `http://34.64.58.23:8080/api/seats/search?cafeName=${encodeURIComponent(inputName)}`
+        `http://34.64.58.23:8080/api/seats/floors?cafeName=${encodeURIComponent(inputName)}`
       )
       if (response.ok) {
-        const data = await response.json()
-        if (data && data.length > 0) {
+        const data: Array<{ floorNumber: number; label: string; seats: TableData[] }> = await response.json()
+        if (data && data.length > 0 && data.some(f => (f.seats ?? []).length > 0)) {
           sessionStorage.setItem("guestCafeName", inputName)
           setCafeName(inputName)
-          setFloors([{ id: 1, label: "1층", tables: data }])
-          setActiveFloorId(1)
+          setFloors(data.map(f => ({ id: f.floorNumber, label: f.label, tables: f.seats ?? [] })))
+          setActiveFloorId(data[0].floorNumber)
           setShowInput(false)
         } else {
           alert("🚨 등록되지 않은 카페이거나, 아직 좌석 배치가 완료되지 않았습니다.\n카페 이름을 다시 확인해주세요!")
