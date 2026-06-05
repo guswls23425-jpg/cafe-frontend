@@ -80,19 +80,39 @@ const chartConfig = {
 
 type TableStatus = "active" | "away" | "available"
 
-// ✨ 백엔드 DB 구조(posX, posY)에 맞게 인터페이스 완벽 수정
 interface TableData {
   id: number
   name: string
   status: TableStatus
   awayTime?: string
-  posX: number // 💡 position.x 대신 직접 posX로 관리
-  posY: number // 💡 position.y 대신 직접 posY로 관리
+  posX: number
+  posY: number
+  personCount: number
 }
 
 const GRID_SIZE = 20
 const TABLE_WIDTH = 120
 const TABLE_HEIGHT = 100
+const ICON_SIZE = Math.round(TABLE_WIDTH / 6) // 20px
+const PERSON_ROW_HEIGHT = ICON_SIZE + 8       // 아이콘 + 여백
+
+// 사람 아이콘 SVG (첨부 이미지와 동일한 실루엣)
+function PersonIcon({ size, filled }: { size: number; filled: boolean }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill={filled ? "currentColor" : "none"}
+      stroke={filled ? "none" : "currentColor"}
+      strokeWidth={1.5}
+      className={filled ? "text-gray-700" : "text-gray-300"}
+    >
+      <circle cx="12" cy="7" r="4" />
+      <path d="M4 21c0-4 3.6-7 8-7s8 3 8 7" />
+    </svg>
+  )
+}
 
 const createInitialTables = (): TableData[] => {
   const tables: TableData[] = []
@@ -103,8 +123,9 @@ const createInitialTables = (): TableData[] => {
       id: i + 1,
       name: `테이블 ${i + 1}`,
       status: "available",
-      posX: col * (TABLE_WIDTH + 20) + 20, 
-      posY: row * (TABLE_HEIGHT + 20) + 20 
+      posX: col * (TABLE_WIDTH + 20) + 20,
+      posY: row * (TABLE_HEIGHT + PERSON_ROW_HEIGHT + 20) + 20,
+      personCount: 0,
     })
   }
   return tables
@@ -134,10 +155,18 @@ const statusConfig = {
 interface DraggableTableProps {
   table: TableData
   onStatusChange: (id: number) => void
+  onPersonCountChange: (id: number, delta: number) => void
   isEditMode: boolean
 }
 
-const DraggableTable = memo(function DraggableTable({ table, onStatusChange, isEditMode }: DraggableTableProps) {
+const TOTAL_HEIGHT = TABLE_HEIGHT + PERSON_ROW_HEIGHT
+
+const DraggableTable = memo(function DraggableTable({
+  table,
+  onStatusChange,
+  onPersonCountChange,
+  isEditMode,
+}: DraggableTableProps) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: table.id,
     disabled: !isEditMode,
@@ -152,13 +181,12 @@ const DraggableTable = memo(function DraggableTable({ table, onStatusChange, isE
 
   const style: React.CSSProperties = {
     position: "absolute",
-    // ✨ 스타일 좌표 지정도 백엔드 변수명(table.posX, table.posY)으로 변경!
     left: table.posX ?? 0,
     top: table.posY ?? 0,
     width: TABLE_WIDTH,
-    height: TABLE_HEIGHT,
+    height: TOTAL_HEIGHT,
     transform: CSS.Transform.toString(transform),
-    opacity: isDragging ? 0 : 1, 
+    opacity: isDragging ? 0 : 1,
     willChange: isEditMode ? "transform" : "auto",
     zIndex: isDragging ? 1000 : 1,
   }
@@ -167,30 +195,64 @@ const DraggableTable = memo(function DraggableTable({ table, onStatusChange, isE
     <div
       ref={setNodeRef}
       style={style}
-      className={`rounded-xl border p-3 transition-colors ${config.bg} ${config.border} ${
-        isEditMode ? "cursor-move" : "cursor-pointer hover:scale-105"
-      }`}
-      onClick={() => !isEditMode && onStatusChange(table.id)}
       {...(isEditMode ? { ...attributes, ...listeners } : {})}
+      className={isEditMode ? "cursor-move" : "cursor-pointer"}
     >
-      {isEditMode && (
-        <div className="absolute left-1/2 top-1 -translate-x-1/2">
-          <GripVertical className="h-4 w-4 text-gray-400" />
-        </div>
-      )}
-      <div className="absolute right-2 top-2">
-        <span className={`inline-block h-2 w-2 rounded-full ${config.dot}`} />
-      </div>
-      <div className="flex h-full flex-col items-center justify-center text-center">
-        <div className="text-sm font-semibold text-gray-900">{table.name}</div>
-        <div className="mt-1 text-xs text-gray-500">{config.label}</div>
-        {table.awayTime && (
-          <div
-            className={`mt-1 text-xs font-medium ${isWarning ? "text-red-500" : "text-yellow-600"}`}
-          >
-            {table.awayTime}
+      {/* 테이블 카드 */}
+      <div
+        className={`relative rounded-xl border p-3 transition-colors ${config.bg} ${config.border}`}
+        style={{ height: TABLE_HEIGHT }}
+        onClick={() => !isEditMode && onStatusChange(table.id)}
+      >
+        {isEditMode && (
+          <div className="absolute left-1/2 top-1 -translate-x-1/2">
+            <GripVertical className="h-4 w-4 text-gray-400" />
           </div>
         )}
+        <div className="absolute right-2 top-2">
+          <span className={`inline-block h-2 w-2 rounded-full ${config.dot}`} />
+        </div>
+        <div className="flex h-full flex-col items-center justify-center text-center">
+          <div className="text-sm font-semibold text-gray-900">{table.name}</div>
+          <div className="mt-1 text-xs text-gray-500">{config.label}</div>
+          {table.awayTime && (
+            <div className={`mt-1 text-xs font-medium ${isWarning ? "text-red-500" : "text-yellow-600"}`}>
+              {table.awayTime}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* 인원 아이콘 행 */}
+      <div
+        className="mt-1 flex items-center justify-center gap-0.5"
+        style={{ height: PERSON_ROW_HEIGHT }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* 감소 버튼 */}
+        <button
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => { e.stopPropagation(); onPersonCountChange(table.id, -1) }}
+          className="flex h-4 w-4 items-center justify-center rounded text-gray-400 hover:bg-gray-200 hover:text-gray-700 disabled:opacity-30"
+          disabled={table.personCount === 0}
+        >
+          <Minus className="h-2.5 w-2.5" />
+        </button>
+
+        {/* 사람 아이콘 4개 */}
+        {Array.from({ length: 4 }).map((_, i) => (
+          <PersonIcon key={i} size={ICON_SIZE} filled={i < table.personCount} />
+        ))}
+
+        {/* 증가 버튼 */}
+        <button
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => { e.stopPropagation(); onPersonCountChange(table.id, 1) }}
+          className="flex h-4 w-4 items-center justify-center rounded text-gray-400 hover:bg-gray-200 hover:text-gray-700 disabled:opacity-30"
+          disabled={table.personCount === 4}
+        >
+          <Plus className="h-2.5 w-2.5" />
+        </button>
       </div>
     </div>
   )
@@ -201,23 +263,26 @@ const TableOverlay = memo(function TableOverlay({ table }: { table: TableData })
   const config = statusConfig[statusKey] || statusConfig.available
 
   return (
-    <div
-      style={{
-        width: TABLE_WIDTH,
-        height: TABLE_HEIGHT,
-        willChange: "transform",
-      }}
-      className={`rounded-xl border p-3 shadow-2xl ${config.bg} ${config.border}`}
-    >
-      <div className="absolute left-1/2 top-1 -translate-x-1/2">
-        <GripVertical className="h-4 w-4 text-gray-400" />
+    <div style={{ width: TABLE_WIDTH, height: TOTAL_HEIGHT, willChange: "transform" }}>
+      <div
+        className={`relative rounded-xl border p-3 shadow-2xl ${config.bg} ${config.border}`}
+        style={{ height: TABLE_HEIGHT }}
+      >
+        <div className="absolute left-1/2 top-1 -translate-x-1/2">
+          <GripVertical className="h-4 w-4 text-gray-400" />
+        </div>
+        <div className="absolute right-2 top-2">
+          <span className={`inline-block h-2 w-2 rounded-full ${config.dot}`} />
+        </div>
+        <div className="flex h-full flex-col items-center justify-center text-center">
+          <div className="text-sm font-semibold text-gray-900">{table.name}</div>
+          <div className="mt-1 text-xs text-gray-500">{config.label}</div>
+        </div>
       </div>
-      <div className="absolute right-2 top-2">
-        <span className={`inline-block h-2 w-2 rounded-full ${config.dot}`} />
-      </div>
-      <div className="flex h-full flex-col items-center justify-center text-center">
-        <div className="text-sm font-semibold text-gray-900">{table.name}</div>
-        <div className="mt-1 text-xs text-gray-500">{config.label}</div>
+      <div className="mt-1 flex items-center justify-center gap-0.5" style={{ height: PERSON_ROW_HEIGHT }}>
+        {Array.from({ length: 4 }).map((_, i) => (
+          <PersonIcon key={i} size={ICON_SIZE} filled={i < table.personCount} />
+        ))}
       </div>
     </div>
   )
@@ -341,10 +406,9 @@ export default function SeatManagementPage() {
     setActiveId(event.active.id as number)
   }
 
-  // 🟢 드래그 종료 시 좌표 업데이트 로직도 posX, posY 구조로 전면 수정
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, delta } = event
-    
+
     if (delta.x === 0 && delta.y === 0) {
       setActiveId(null)
       return
@@ -354,21 +418,17 @@ export default function SeatManagementPage() {
       prev.map((table) => {
         if (table.id === active.id) {
           const canvas = canvasRef.current
-          const maxX = canvas ? canvas.clientWidth - TABLE_WIDTH : 600
-          const maxY = canvas ? canvas.clientHeight - TABLE_HEIGHT : 400
+          // 스크롤 가능 영역이므로 scrollWidth/scrollHeight 기준으로 범위 제한
+          const maxX = canvas ? canvas.scrollWidth - TABLE_WIDTH : 800
+          const maxY = canvas ? canvas.scrollHeight - TOTAL_HEIGHT : 600
 
-          // ✨기존 table.position.x 지우고 table.posX 기반 계산
           const currentX = table.posX ?? 0
           const currentY = table.posY ?? 0
 
           const newX = snapToGrid(Math.max(0, Math.min(maxX, currentX + delta.x)))
           const newY = snapToGrid(Math.max(0, Math.min(maxY, currentY + delta.y)))
 
-          return {
-            ...table,
-            posX: newX,
-            posY: newY
-          }
+          return { ...table, posX: newX, posY: newY }
         }
         return table
       })
@@ -389,8 +449,9 @@ export default function SeatManagementPage() {
           id: i + 1,
           name: `테이블 ${i + 1}`,
           status: "available",
-          posX: col * (TABLE_WIDTH + 20) + 20, 
-          posY: row * (TABLE_HEIGHT + 20) + 20 
+          posX: col * (TABLE_WIDTH + 20) + 20,
+          posY: row * (TOTAL_HEIGHT + 20) + 20,
+          personCount: 0,
         })
       }
       setTables(newTables)
@@ -398,6 +459,16 @@ export default function SeatManagementPage() {
       setTables(tables.slice(0, newCount))
     }
   }
+
+  const handlePersonCountChange = useCallback((tableId: number, delta: number) => {
+    setTables((prev) =>
+      prev.map((t) =>
+        t.id === tableId
+          ? { ...t, personCount: Math.max(0, Math.min(4, (t.personCount ?? 0) + delta)) }
+          : t
+      )
+    )
+  }, [])
 
   const cycleTableStatus = useCallback((tableId: number) => {
     if (isEditMode) return
@@ -429,7 +500,6 @@ export default function SeatManagementPage() {
     )
   }
 
-  // 🟢 배치 초기화 함수도 posX, posY 규칙으로 전면 정렬
   const resetPositions = () => {
     setTables((prev) =>
       prev.map((table, i) => {
@@ -437,8 +507,8 @@ export default function SeatManagementPage() {
         const row = Math.floor(i / 4)
         return {
           ...table,
-          posX: col * (TABLE_WIDTH + 20) + 20, 
-          posY: row * (TABLE_HEIGHT + 20) + 20 
+          posX: col * (TABLE_WIDTH + 20) + 20,
+          posY: row * (TOTAL_HEIGHT + 20) + 20,
         }
       })
     )
@@ -527,42 +597,51 @@ export default function SeatManagementPage() {
               </div>
 
               {isLoading ? (
-                <div className="flex min-h-[500px] flex-col items-center justify-center rounded-xl border border-gray-200 bg-gray-100/50">
+                <div className="flex h-[500px] flex-col items-center justify-center rounded-xl border border-gray-200 bg-gray-100/50">
                   <Loader2 className="h-8 w-8 animate-spin text-emerald-500" />
                   <p className="mt-3 text-sm text-gray-500">최신 배치도를 불러오는 중...</p>
                 </div>
               ) : (
-                <DndContext 
+                <DndContext
                   sensors={sensors}
                   onDragStart={handleDragStart}
                   onDragEnd={handleDragEnd}
                 >
+                  {/* 스크롤 가능 컨테이너 */}
                   <div
-                    ref={canvasRef}
-                    className={`relative min-h-[500px] rounded-xl border bg-gray-100/50 ${
+                    className={`h-[500px] overflow-auto rounded-xl border ${
                       isEditMode ? "border-emerald-400" : "border-gray-200"
                     }`}
-                    style={{
-                      backgroundImage: isEditMode
-                        ? `radial-gradient(circle, rgba(156, 163, 175, 0.6) 1px, transparent 1px)`
-                        : 'none',
-                      backgroundSize: `${GRID_SIZE}px ${GRID_SIZE}px`,
-                    }}
                   >
-                    {isEditMode && (
-                      <div className="absolute left-4 top-4 rounded-lg bg-emerald-100 px-3 py-1.5 text-xs text-emerald-700 border border-emerald-200">
-                        배치 편집 모드 - 테이블을 드래그하세요
-                      </div>
-                    )}
-                    
-                    {tables.map((table) => (
-                      <DraggableTable
-                        key={table.id}
-                        table={table}
-                        onStatusChange={cycleTableStatus}
-                        isEditMode={isEditMode}
-                      />
-                    ))}
+                    {/* 실제 캔버스 (충분히 넓게) */}
+                    <div
+                      ref={canvasRef}
+                      className="relative bg-gray-100/50"
+                      style={{
+                        width: 1200,
+                        height: 900,
+                        backgroundImage: isEditMode
+                          ? `radial-gradient(circle, rgba(156, 163, 175, 0.6) 1px, transparent 1px)`
+                          : "none",
+                        backgroundSize: `${GRID_SIZE}px ${GRID_SIZE}px`,
+                      }}
+                    >
+                      {isEditMode && (
+                        <div className="absolute left-4 top-4 z-10 rounded-lg border border-emerald-200 bg-emerald-100 px-3 py-1.5 text-xs text-emerald-700">
+                          배치 편집 모드 - 테이블을 드래그하세요
+                        </div>
+                      )}
+
+                      {tables.map((table) => (
+                        <DraggableTable
+                          key={table.id}
+                          table={table}
+                          onStatusChange={cycleTableStatus}
+                          onPersonCountChange={handlePersonCountChange}
+                          isEditMode={isEditMode}
+                        />
+                      ))}
+                    </div>
                   </div>
 
                   <DragOverlay>
