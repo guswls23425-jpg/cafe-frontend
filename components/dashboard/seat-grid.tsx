@@ -27,27 +27,27 @@ interface TableCardProps {
 
 const statusConfig = {
   occupied: {
-    bg: "bg-emerald-500/20",
-    border: "border-emerald-500/50",
+    bg: "bg-emerald-50",
+    border: "border-emerald-300",
     dot: "bg-emerald-500",
     label: "사용중",
   },
   away: {
-    bg: "bg-yellow-500/20",
-    border: "border-yellow-500/50",
+    bg: "bg-yellow-50",
+    border: "border-yellow-300",
     dot: "bg-yellow-500",
     label: "자리비움",
   },
   warning: {
-    bg: "bg-red-500/20",
-    border: "border-red-500/50",
+    bg: "bg-red-50",
+    border: "border-red-300",
     dot: "bg-red-500",
     label: "경고",
   },
   available: {
-    bg: "bg-zinc-800",
-    border: "border-zinc-700",
-    dot: "bg-zinc-500",
+    bg: "bg-gray-50",
+    border: "border-gray-200",
+    dot: "bg-gray-400",
     label: "이용가능",
   },
 }
@@ -59,21 +59,21 @@ function TableCard({ tableNumber, status, awayTime, onForceReset }: TableCardPro
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button
-          className={`relative flex h-28 w-full flex-col items-center justify-center rounded-lg border ${config.bg} ${config.border} transition-all hover:scale-105 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-zinc-600`}
+          className={`relative flex h-28 w-full flex-col items-center justify-center rounded-lg border ${config.bg} ${config.border} transition-all hover:scale-105 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-gray-300`}
         >
           <div className={`absolute right-2 top-2 h-2 w-2 rounded-full ${config.dot}`} />
-          <span className="text-lg font-semibold text-white">테이블 {tableNumber}</span>
-          <span className="text-xs text-zinc-400">{config.label}</span>
+          <span className="text-lg font-semibold text-gray-900">테이블 {tableNumber}</span>
+          <span className="text-xs text-gray-500">{config.label}</span>
           {(status === "away" || status === "warning") && awayTime && (
-            <span className={`mt-1 font-mono text-sm ${status === "warning" ? "text-red-400" : "text-yellow-400"}`}>
+            <span className={`mt-1 font-mono text-sm ${status === "warning" ? "text-red-500" : "text-yellow-600"}`}>
               {awayTime}
             </span>
           )}
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent className="border-zinc-700 bg-zinc-900">
+      <DropdownMenuContent className="border-gray-200 bg-white shadow-md">
         <DropdownMenuItem
-          className="cursor-pointer text-zinc-300 focus:bg-zinc-800 focus:text-white"
+          className="cursor-pointer text-gray-700 focus:bg-gray-100 focus:text-gray-900"
           onClick={onForceReset}
         >
           <RotateCcw className="mr-2 h-4 w-4" />
@@ -176,12 +176,12 @@ export function SeatGrid() {
     return (
       <div className="flex flex-col gap-4">
         <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="h-5 w-48 animate-pulse rounded bg-zinc-800" />
-          <div className="h-8 w-32 animate-pulse rounded bg-zinc-800" />
+          <div className="h-5 w-48 animate-pulse rounded bg-gray-200" />
+          <div className="h-8 w-32 animate-pulse rounded bg-gray-200" />
         </div>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {Array.from({ length: 16 }).map((_, i) => (
-            <div key={i} className="h-28 animate-pulse rounded-lg bg-zinc-800" />
+            <div key={i} className="h-28 animate-pulse rounded-lg bg-gray-200" />
           ))}
         </div>
       </div>
@@ -192,34 +192,34 @@ export function SeatGrid() {
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex flex-wrap items-center gap-4 text-sm">
-          <span className="text-zinc-400">범례:</span>
+          <span className="text-gray-500">범례:</span>
           <div className="flex items-center gap-1.5">
             <div className="h-3 w-3 rounded-full bg-emerald-500" />
-            <span className="text-zinc-300">사용중</span>
+            <span className="text-gray-700">사용중</span>
           </div>
           <div className="flex items-center gap-1.5">
             <div className="h-3 w-3 rounded-full bg-yellow-500" />
-            <span className="text-zinc-300">자리비움</span>
+            <span className="text-gray-700">자리비움</span>
           </div>
           <div className="flex items-center gap-1.5">
             <div className="h-3 w-3 rounded-full bg-red-500" />
-            <span className="text-zinc-300">경고</span>
+            <span className="text-gray-700">경고</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <div className="h-3 w-3 rounded-full bg-zinc-500" />
-            <span className="text-zinc-300">이용가능</span>
+            <div className="h-3 w-3 rounded-full bg-gray-400" />
+            <span className="text-gray-700">이용가능</span>
           </div>
         </div>
 
         {/* 테이블 추가/삭제 버튼 */}
         <div className="flex items-center gap-2">
-          <span className="text-sm text-zinc-400">테이블 수: {tables.length}</span>
+          <span className="text-sm text-gray-500">테이블 수: {tables.length}</span>
           <Button
             variant="outline"
             size="sm"
             onClick={handleRemoveTable}
             disabled={tables.length <= 1}
-            className="h-8 w-8 border-zinc-700 bg-zinc-800 p-0 text-zinc-300 hover:bg-zinc-700 hover:text-white disabled:opacity-50"
+            className="h-8 w-8 border-gray-300 bg-white p-0 text-gray-600 hover:bg-gray-100 hover:text-gray-900 disabled:opacity-50"
           >
             <Minus className="h-4 w-4" />
             <span className="sr-only">테이블 삭제</span>
@@ -228,7 +228,7 @@ export function SeatGrid() {
             variant="outline"
             size="sm"
             onClick={handleAddTable}
-            className="h-8 w-8 border-zinc-700 bg-zinc-800 p-0 text-zinc-300 hover:bg-zinc-700 hover:text-white"
+            className="h-8 w-8 border-gray-300 bg-white p-0 text-gray-600 hover:bg-gray-100 hover:text-gray-900"
           >
             <Plus className="h-4 w-4" />
             <span className="sr-only">테이블 추가</span>

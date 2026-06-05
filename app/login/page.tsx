@@ -78,8 +78,8 @@ export default function LoginPage() {
   }
 
   return (
-    <div 
-      className="flex min-h-screen items-center justify-center bg-zinc-950/95 px-4 cursor-pointer"
+    <div
+      className="flex min-h-screen items-center justify-center bg-gray-50/95 px-4 cursor-pointer"
       onClick={handleBackdropClick}
     >
       {/* 배경 그라데이션 효과 */}
@@ -88,11 +88,11 @@ export default function LoginPage() {
         <div className="absolute -bottom-40 -right-40 h-80 w-80 rounded-full bg-emerald-500/10 blur-3xl" />
       </div>
 
-      <Card className="relative w-full max-w-md border-zinc-800 bg-zinc-900/80 backdrop-blur-sm cursor-default">
+      <Card className="relative w-full max-w-md border-gray-200 bg-white shadow-lg cursor-default">
         {/* 닫기 버튼 */}
         <button
           onClick={handleClose}
-          className="absolute right-4 top-4 rounded-full p-1 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
+          className="absolute right-4 top-4 rounded-full p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
           aria-label="닫기"
         >
           <X className="h-5 w-5" />
@@ -102,12 +102,12 @@ export default function LoginPage() {
           <div className="flex justify-center">
             <div className="flex items-center gap-2 rounded-full bg-emerald-500/10 px-4 py-2">
               <Coffee className="h-6 w-6 text-emerald-500" />
-              <span className="text-lg font-semibold text-white">카페모니터</span>
+              <span className="text-lg font-semibold text-gray-900">카페모니터</span>
             </div>
           </div>
           <div>
-            <CardTitle className="text-2xl text-white">로그인</CardTitle>
-            <CardDescription className="text-zinc-400">
+            <CardTitle className="text-2xl text-gray-900">로그인</CardTitle>
+            <CardDescription className="text-gray-500">
               카페 좌석 모니터링 대시보드에 접속하세요
             </CardDescription>
           </div>
@@ -115,42 +115,42 @@ export default function LoginPage() {
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email" className="text-sm text-zinc-300">
+              <Label htmlFor="email" className="text-sm text-gray-700">
                 이메일
               </Label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+                <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                 <Input
                   id="email"
                   type="email"
                   placeholder="name@example.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="border-zinc-700 bg-zinc-800 pl-10 text-white placeholder:text-zinc-500 focus-visible:ring-emerald-500"
+                  className="border-gray-300 bg-gray-50 pl-10 text-gray-900 placeholder:text-gray-400 focus-visible:ring-emerald-500"
                   required
                 />
               </div>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="password" className="text-sm text-zinc-300">
+              <Label htmlFor="password" className="text-sm text-gray-700">
                 비밀번호
               </Label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+                <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                 <Input
                   id="password"
                   type={showPassword ? "text" : "password"}
                   placeholder="비밀번호를 입력하세요"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="border-zinc-700 bg-zinc-800 pl-10 pr-10 text-white placeholder:text-zinc-500 focus-visible:ring-emerald-500"
+                  className="border-gray-300 bg-gray-50 pl-10 pr-10 text-gray-900 placeholder:text-gray-400 focus-visible:ring-emerald-500"
                   required
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
                 >
                   {showPassword ? (
                     <EyeOff className="h-4 w-4" />
@@ -165,13 +165,13 @@ export default function LoginPage() {
               <label className="flex cursor-pointer items-center gap-2">
                 <input
                   type="checkbox"
-                  className="h-4 w-4 rounded border-zinc-700 bg-zinc-800 text-emerald-500 focus:ring-emerald-500"
+                  className="h-4 w-4 rounded border-gray-300 bg-gray-50 text-emerald-500 focus:ring-emerald-500"
                 />
-                <span className="text-sm text-zinc-400">로그인 상태 유지</span>
+                <span className="text-sm text-gray-500">로그인 상태 유지</span>
               </label>
               <Link
                 href="/forgot-password"
-                className="text-sm text-emerald-500 hover:text-emerald-400"
+                className="text-sm text-emerald-500 hover:text-emerald-600"
               >
                 비밀번호 찾기
               </Link>
@@ -223,18 +223,18 @@ export default function LoginPage() {
           <div className="mt-6">
             <div className="relative">
               <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-zinc-800" />
+                <div className="w-full border-t border-gray-200" />
               </div>
               <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-zinc-900 px-2 text-zinc-500">또는</span>
+                <span className="bg-white px-2 text-gray-400">또는</span>
               </div>
             </div>
 
-            <div className="mt-4 text-center text-sm text-zinc-400">
+            <div className="mt-4 text-center text-sm text-gray-500">
               계정이 없으신가요?{" "}
               <Link
                 href="/signup"
-                className="font-medium text-emerald-500 hover:text-emerald-400"
+                className="font-medium text-emerald-500 hover:text-emerald-600"
               >
                 회원가입
               </Link>

@@ -81,13 +81,13 @@ const durationChartConfig = {
 
 export function WeeklyTrendsChart() {
   return (
-    <Card className="border-zinc-800 bg-zinc-900/50">
+    <Card className="border-gray-200 bg-white">
       <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-white">
+        <CardTitle className="flex items-center gap-2 text-gray-900">
           <TrendingUp className="h-5 w-5 text-emerald-500" />
           주간 좌석 이용률 추이
         </CardTitle>
-        <CardDescription className="text-zinc-400">
+        <CardDescription className="text-gray-500">
           지난 주 점유율 및 좌석 활동 현황
         </CardDescription>
       </CardHeader>
@@ -104,16 +104,16 @@ export function WeeklyTrendsChart() {
                 <stop offset="95%" stopColor="#f59e0b" stopOpacity={0} />
               </linearGradient>
             </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="#3f3f46" />
+            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
             <XAxis
               dataKey="day"
-              tick={{ fill: "#a1a1aa", fontSize: 12 }}
-              axisLine={{ stroke: "#3f3f46" }}
+              tick={{ fill: "#6b7280", fontSize: 12 }}
+              axisLine={{ stroke: "#e5e7eb" }}
               tickLine={false}
             />
             <YAxis
-              tick={{ fill: "#a1a1aa", fontSize: 12 }}
-              axisLine={{ stroke: "#3f3f46" }}
+              tick={{ fill: "#6b7280", fontSize: 12 }}
+              axisLine={{ stroke: "#e5e7eb" }}
               tickLine={false}
             />
             <ChartTooltip content={<ChartTooltipContent />} />
@@ -141,28 +141,28 @@ export function WeeklyTrendsChart() {
 
 export function ProblemTablesChart() {
   return (
-    <Card className="border-zinc-800 bg-zinc-900/50">
+    <Card className="border-gray-200 bg-white">
       <CardHeader>
-        <CardTitle className="text-white">문제 빈도 상위 5개 테이블</CardTitle>
-        <CardDescription className="text-zinc-400">
+        <CardTitle className="text-gray-900">문제 빈도 상위 5개 테이블</CardTitle>
+        <CardDescription className="text-gray-500">
           노쇼 및 좌석 독점 발생 횟수
         </CardDescription>
       </CardHeader>
       <CardContent>
         <ChartContainer config={problemTablesConfig} className="h-[280px] w-full">
           <BarChart data={problemTablesData} layout="vertical">
-            <CartesianGrid strokeDasharray="3 3" stroke="#3f3f46" horizontal={false} />
+            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" horizontal={false} />
             <XAxis
               type="number"
-              tick={{ fill: "#a1a1aa", fontSize: 12 }}
-              axisLine={{ stroke: "#3f3f46" }}
+              tick={{ fill: "#6b7280", fontSize: 12 }}
+              axisLine={{ stroke: "#e5e7eb" }}
               tickLine={false}
             />
             <YAxis
               dataKey="table"
               type="category"
-              tick={{ fill: "#a1a1aa", fontSize: 12 }}
-              axisLine={{ stroke: "#3f3f46" }}
+              tick={{ fill: "#6b7280", fontSize: 12 }}
+              axisLine={{ stroke: "#e5e7eb" }}
               tickLine={false}
               width={70}
             />
@@ -177,10 +177,10 @@ export function ProblemTablesChart() {
 
 export function StayDurationChart() {
   return (
-    <Card className="border-zinc-800 bg-zinc-900/50">
+    <Card className="border-gray-200 bg-white">
       <CardHeader>
-        <CardTitle className="text-white">평균 체류 시간 분포</CardTitle>
-        <CardDescription className="text-zinc-400">
+        <CardTitle className="text-gray-900">평균 체류 시간 분포</CardTitle>
+        <CardDescription className="text-gray-500">
           고객의 일반적인 좌석 이용 시간
         </CardDescription>
       </CardHeader>
@@ -213,24 +213,24 @@ export function StayDurationChart() {
 
 export function AIInsightCard() {
   return (
-    <Card className="border-amber-500/30 bg-amber-500/5">
+    <Card className="border-amber-300 bg-amber-50">
       <CardHeader className="pb-3">
-        <CardTitle className="flex items-center gap-2 text-amber-400">
+        <CardTitle className="flex items-center gap-2 text-amber-600">
           <Lightbulb className="h-5 w-5" />
           AI 비즈니스 인사이트
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
-        <p className="text-sm leading-relaxed text-zinc-300">
-          <span className="font-semibold text-amber-400">팁:</span> 테이블 4는 주말 평균 자리비움 시간이 42분입니다. 
+        <p className="text-sm leading-relaxed text-gray-700">
+          <span className="font-semibold text-amber-600">팁:</span> 테이블 4는 주말 평균 자리비움 시간이 42분입니다.
           피크 시간대(오후 12시~3시)에 자리비움 제한 시간을 15분으로 줄이면 테이블 회전율이 약 18% 증가할 것으로 예상됩니다.
         </p>
-        <p className="text-sm leading-relaxed text-zinc-300">
-          <span className="font-semibold text-amber-400">관찰:</span> 토요일 오후에 노쇼율이 35% 더 높게 나타납니다. 
+        <p className="text-sm leading-relaxed text-gray-700">
+          <span className="font-semibold text-amber-600">관찰:</span> 토요일 오후에 노쇼율이 35% 더 높게 나타납니다.
           10분 짐만 놓기 경고를 도입하면 하루에 약 3시간의 추가 테이블 이용 시간을 확보할 수 있습니다.
         </p>
-        <p className="text-sm leading-relaxed text-zinc-300">
-          <span className="font-semibold text-amber-400">트렌드:</span> 창가 테이블(테이블 1-4)의 평균 점유 시간이 25% 더 깁니다. 
+        <p className="text-sm leading-relaxed text-gray-700">
+          <span className="font-semibold text-amber-600">트렌드:</span> 창가 테이블(테이블 1-4)의 평균 점유 시간이 25% 더 깁니다.
           이 인기 좌석에 대해 프리미엄 요금제 또는 시간 제한을 고려해 보세요.
         </p>
       </CardContent>

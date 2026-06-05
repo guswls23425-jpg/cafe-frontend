@@ -82,8 +82,8 @@ export default function SignupPage() {
   ]
 
   return (
-    <div 
-      className="flex min-h-screen items-center justify-center bg-zinc-950/95 px-4 py-8 cursor-pointer"
+    <div
+      className="flex min-h-screen items-center justify-center bg-gray-50/95 px-4 py-8 cursor-pointer"
       onClick={handleBackdropClick}
     >
       {/* 배경 그라데이션 효과 */}
@@ -92,11 +92,11 @@ export default function SignupPage() {
         <div className="absolute -bottom-40 -right-40 h-80 w-80 rounded-full bg-emerald-500/10 blur-3xl" />
       </div>
 
-      <Card className="relative w-full max-w-md border-zinc-800 bg-zinc-900/80 backdrop-blur-sm cursor-default">
+      <Card className="relative w-full max-w-md border-gray-200 bg-white shadow-lg cursor-default">
         {/* 닫기 버튼 */}
         <button
           onClick={handleClose}
-          className="absolute right-4 top-4 rounded-full p-1 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white z-10"
+          className="absolute right-4 top-4 rounded-full p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 z-10"
           aria-label="닫기"
         >
           <X className="h-5 w-5" />
@@ -106,12 +106,12 @@ export default function SignupPage() {
           <div className="flex justify-center">
             <div className="flex items-center gap-2 rounded-full bg-emerald-500/10 px-4 py-2">
               <Coffee className="h-6 w-6 text-emerald-500" />
-              <span className="text-lg font-semibold text-white">카페모니터</span>
+              <span className="text-lg font-semibold text-gray-900">카페모니터</span>
             </div>
           </div>
           <div>
-            <CardTitle className="text-2xl text-white">회원가입</CardTitle>
-            <CardDescription className="text-zinc-400">
+            <CardTitle className="text-2xl text-gray-900">회원가입</CardTitle>
+            <CardDescription className="text-gray-500">
               새 계정을 만들어 좌석 모니터링을 시작하세요
             </CardDescription>
           </div>
@@ -119,78 +119,78 @@ export default function SignupPage() {
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="name" className="text-sm text-zinc-300">
+              <Label htmlFor="name" className="text-sm text-gray-700">
                 이름
               </Label>
               <div className="relative">
-                <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+                <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                 <Input
                   id="name"
                   type="text"
                   placeholder="홍길동"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="border-zinc-700 bg-zinc-800 pl-10 text-white placeholder:text-zinc-500 focus-visible:ring-emerald-500"
+                  className="border-gray-300 bg-gray-50 pl-10 text-gray-900 placeholder:text-gray-400 focus-visible:ring-emerald-500"
                   required
                 />
               </div>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="email" className="text-sm text-zinc-300">
+              <Label htmlFor="email" className="text-sm text-gray-700">
                 이메일
               </Label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+                <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                 <Input
                   id="email"
                   type="email"
                   placeholder="name@example.com"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className="border-zinc-700 bg-zinc-800 pl-10 text-white placeholder:text-zinc-500 focus-visible:ring-emerald-500"
+                  className="border-gray-300 bg-gray-50 pl-10 text-gray-900 placeholder:text-gray-400 focus-visible:ring-emerald-500"
                   required
                 />
               </div>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="cafeName" className="text-sm text-zinc-300">
+              <Label htmlFor="cafeName" className="text-sm text-gray-700">
                 카페명
               </Label>
               <div className="relative">
-                <Building2 className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+                <Building2 className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                 <Input
                   id="cafeName"
                   type="text"
                   placeholder="카페 이름을 입력하세요"
                   value={formData.cafeName}
                   onChange={(e) => setFormData({ ...formData, cafeName: e.target.value })}
-                  className="border-zinc-700 bg-zinc-800 pl-10 text-white placeholder:text-zinc-500 focus-visible:ring-emerald-500"
+                  className="border-gray-300 bg-gray-50 pl-10 text-gray-900 placeholder:text-gray-400 focus-visible:ring-emerald-500"
                   required
                 />
               </div>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="password" className="text-sm text-zinc-300">
+              <Label htmlFor="password" className="text-sm text-gray-700">
                 비밀번호
               </Label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+                <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                 <Input
                   id="password"
                   type={showPassword ? "text" : "password"}
                   placeholder="비밀번호를 입력하세요"
                   value={formData.password}
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  className="border-zinc-700 bg-zinc-800 pl-10 pr-10 text-white placeholder:text-zinc-500 focus-visible:ring-emerald-500"
+                  className="border-gray-300 bg-gray-50 pl-10 pr-10 text-gray-900 placeholder:text-gray-400 focus-visible:ring-emerald-500"
                   required
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
                 >
                   {showPassword ? (
                     <EyeOff className="h-4 w-4" />
@@ -205,10 +205,10 @@ export default function SignupPage() {
                     <div key={index} className="flex items-center gap-2 text-xs">
                       <Check
                         className={`h-3 w-3 ${
-                          req.met ? "text-emerald-500" : "text-zinc-600"
+                          req.met ? "text-emerald-500" : "text-gray-400"
                         }`}
                       />
-                      <span className={req.met ? "text-emerald-500" : "text-zinc-500"}>
+                      <span className={req.met ? "text-emerald-500" : "text-gray-400"}>
                         {req.text}
                       </span>
                     </div>
@@ -218,24 +218,24 @@ export default function SignupPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="confirmPassword" className="text-sm text-zinc-300">
+              <Label htmlFor="confirmPassword" className="text-sm text-gray-700">
                 비밀번호 확인
               </Label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+                <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                 <Input
                   id="confirmPassword"
                   type={showConfirmPassword ? "text" : "password"}
                   placeholder="비밀번호를 다시 입력하세요"
                   value={formData.confirmPassword}
                   onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-                  className="border-zinc-700 bg-zinc-800 pl-10 pr-10 text-white placeholder:text-zinc-500 focus-visible:ring-emerald-500"
+                  className="border-gray-300 bg-gray-50 pl-10 pr-10 text-gray-900 placeholder:text-gray-400 focus-visible:ring-emerald-500"
                   required
                 />
                 <button
                   type="button"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
                 >
                   {showConfirmPassword ? (
                     <EyeOff className="h-4 w-4" />
@@ -254,15 +254,15 @@ export default function SignupPage() {
                 type="checkbox"
                 checked={agreeTerms}
                 onChange={(e) => setAgreeTerms(e.target.checked)}
-                className="mt-1 h-4 w-4 rounded border-zinc-700 bg-zinc-800 text-emerald-500 focus:ring-emerald-500"
+                className="mt-1 h-4 w-4 rounded border-gray-300 bg-gray-50 text-emerald-500 focus:ring-emerald-500"
                 required
               />
-              <span className="text-sm text-zinc-400">
-                <Link href="/terms" className="text-emerald-500 hover:text-emerald-400">
+              <span className="text-sm text-gray-500">
+                <Link href="/terms" className="text-emerald-500 hover:text-emerald-600">
                   이용약관
                 </Link>
                 {" 및 "}
-                <Link href="/privacy" className="text-emerald-500 hover:text-emerald-400">
+                <Link href="/privacy" className="text-emerald-500 hover:text-emerald-600">
                   개인정보처리방침
                 </Link>
                 에 동의합니다
@@ -313,11 +313,11 @@ export default function SignupPage() {
             </Button>
           </form>
 
-          <div className="mt-6 text-center text-sm text-zinc-400">
+          <div className="mt-6 text-center text-sm text-gray-500">
             이미 계정이 있으신가요?{" "}
             <Link
               href="/login"
-              className="font-medium text-emerald-500 hover:text-emerald-400"
+              className="font-medium text-emerald-500 hover:text-emerald-600"
             >
               로그인
             </Link>

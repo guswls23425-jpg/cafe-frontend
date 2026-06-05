@@ -11,14 +11,14 @@ interface StatCardProps {
 
 function StatCard({ title, value, icon, accent = "default" }: StatCardProps) {
   const accentStyles = {
-    default: "border-zinc-700 bg-zinc-900",
+    default: "border-gray-200 bg-white",
     yellow: "border-yellow-500/30 bg-yellow-500/10",
     red: "border-red-500/30 bg-red-500/10",
     green: "border-emerald-500/30 bg-emerald-500/10",
   }
 
   const iconStyles = {
-    default: "text-zinc-400",
+    default: "text-gray-400",
     yellow: "text-yellow-500",
     red: "text-red-500",
     green: "text-emerald-500",
@@ -30,8 +30,8 @@ function StatCard({ title, value, icon, accent = "default" }: StatCardProps) {
     >
       <div className={iconStyles[accent]}>{icon}</div>
       <div>
-        <p className="text-xs text-zinc-400">{title}</p>
-        <p className="text-lg font-semibold text-white">{value}</p>
+        <p className="text-xs text-gray-500">{title}</p>
+        <p className="text-lg font-semibold text-gray-900">{value}</p>
       </div>
     </div>
   )
@@ -39,7 +39,7 @@ function StatCard({ title, value, icon, accent = "default" }: StatCardProps) {
 
 export function HeaderStats() {
   return (
-    <header className="border-b border-zinc-800 bg-zinc-950 px-6 py-4">
+    <header className="border-b border-gray-200 bg-white px-6 py-4">
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         <StatCard
           title="전체 좌석"

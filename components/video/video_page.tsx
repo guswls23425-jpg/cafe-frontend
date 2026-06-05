@@ -22,22 +22,22 @@ export function CameraFeedSimulator() {
   }, [])
 
   return (
-    <Card className="border-zinc-800 bg-zinc-900/50 flex flex-col h-full min-h-0">
+    <Card className="border-gray-200 bg-white flex flex-col h-full min-h-0">
       <CardHeader className='flex-none'>
-        <CardTitle className="flex items-center gap-2 text-white">
+        <CardTitle className="flex items-center gap-2 text-gray-900">
           <Camera className="h-5 w-5 text-emerald-500" />
           매장 실시간 CCTV 피드
         </CardTitle>
-        <CardDescription className="text-zinc-400">
+        <CardDescription className="text-gray-500">
           테이블 감지 영역(ROI) 오버레이 및 실시간 영상
         </CardDescription>
       </CardHeader>
-      
+
       <CardContent className="flex-1 flex flex-col pb-6 min-h-0">
-        
+
         {/* 비디오 컨테이너 */}
-        <div className="relative flex-1 min-h-0 w-full aspect-video overflow-hidden rounded-lg border border-zinc-700 bg-black flex items-center justify-center shadow-inner">
-          <div className="relative w-full max-h-full aspect-video flex-shrink-0 bg-zinc-900"></div>
+        <div className="relative flex-1 min-h-0 w-full aspect-video overflow-hidden rounded-lg border border-gray-300 bg-gray-900 flex items-center justify-center shadow-inner">
+          <div className="relative w-full max-h-full aspect-video flex-shrink-0 bg-gray-800"></div>
           
           {/* 바탕에 깔리는 실제 카메라 피드 */}
           {!hasError ? (
@@ -49,7 +49,7 @@ export function CameraFeedSimulator() {
               onError={() => setHasError(true)}
             />
           ) : (
-            <div className="z-0 flex flex-col items-center justify-center text-zinc-500">
+            <div className="z-0 flex flex-col items-center justify-center text-gray-400">
               <Camera className="h-10 w-10 mb-2 opacity-30" />
               <p className="text-sm">비디오 스트림에 연결할 수 없습니다.</p>
               <p className="text-xs mt-1">AI 서버 상태를 확인해 주세요.</p>
@@ -75,7 +75,7 @@ export function CameraFeedSimulator() {
           </div>
         </div>
 
-        <p className="mt-4 flex-none text-xs text-zinc-400 text-center">
+        <p className="mt-4 flex-none text-xs text-gray-500 text-center">
           녹색 박스는 AI가 모니터링 중인 테이블 감지(ROI) 영역을 나타냅니다. 마우스로 클릭하여 세부 조정이 가능합니다.
         </p>
       </CardContent>
@@ -99,13 +99,13 @@ export function RuleConfigurations() {
   }
 
   return (
-    <Card className="border-zinc-800 bg-zinc-900/50">
+    <Card className="border-gray-200 bg-white">
       <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-white">
+        <CardTitle className="flex items-center gap-2 text-gray-900">
           <Bell className="h-5 w-5 text-amber-500" />
           규칙 설정
         </CardTitle>
-        <CardDescription className="text-zinc-400">
+        <CardDescription className="text-gray-500">
           모니터링 규칙 및 알림 연동 설정
         </CardDescription>
       </CardHeader>
@@ -113,8 +113,8 @@ export function RuleConfigurations() {
         {/* 자리비움 시간 슬라이더 */}
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <Label className="text-sm text-zinc-300">최대 자리비움 허용 시간</Label>
-            <span className="rounded bg-zinc-800 px-2 py-1 text-sm font-medium text-emerald-400">
+            <Label className="text-sm text-gray-700">최대 자리비움 허용 시간</Label>
+            <span className="rounded bg-gray-100 px-2 py-1 text-sm font-medium text-emerald-600">
               {awayTimeLimit[0]}분
             </span>
           </div>
@@ -126,7 +126,7 @@ export function RuleConfigurations() {
             step={1}
             className="w-full"
           />
-          <div className="flex justify-between text-xs text-zinc-500">
+          <div className="flex justify-between text-xs text-gray-400">
             <span>5분</span>
             <span>30분</span>
           </div>
@@ -134,7 +134,7 @@ export function RuleConfigurations() {
 
         {/* Discord 웹훅 */}
         <div className="space-y-2">
-          <Label htmlFor="discord-webhook" className="flex items-center gap-2 text-sm text-zinc-300">
+          <Label htmlFor="discord-webhook" className="flex items-center gap-2 text-sm text-gray-700">
             <MessageSquare className="h-4 w-4 text-indigo-400" />
             Discord 웹훅 URL
           </Label>
@@ -144,13 +144,13 @@ export function RuleConfigurations() {
             placeholder="https://discord.com/api/webhooks/..."
             value={discordWebhook}
             onChange={(e) => setDiscordWebhook(e.target.value)}
-            className="border-zinc-700 bg-zinc-800 text-white placeholder:text-zinc-500 focus-visible:ring-emerald-500"
+            className="border-gray-300 bg-gray-50 text-gray-900 placeholder:text-gray-400 focus-visible:ring-emerald-500"
           />
         </div>
 
         {/* 카카오톡 API 키 */}
         <div className="space-y-2">
-          <Label htmlFor="kakao-api" className="flex items-center gap-2 text-sm text-zinc-300">
+          <Label htmlFor="kakao-api" className="flex items-center gap-2 text-sm text-gray-700">
             <Link2 className="h-4 w-4 text-yellow-400" />
             카카오톡 알림 API 키
           </Label>
@@ -160,7 +160,7 @@ export function RuleConfigurations() {
             placeholder="카카오톡 API 키를 입력하세요"
             value={kakaoApiKey}
             onChange={(e) => setKakaoApiKey(e.target.value)}
-            className="border-zinc-700 bg-zinc-800 text-white placeholder:text-zinc-500 focus-visible:ring-emerald-500"
+            className="border-gray-300 bg-gray-50 text-gray-900 placeholder:text-gray-400 focus-visible:ring-emerald-500"
           />
         </div>
 
@@ -176,7 +176,7 @@ export function RuleConfigurations() {
           <Button
             onClick={handleCancel}
             variant="outline"
-            className="flex-1 border-zinc-700 bg-transparent text-zinc-300 hover:bg-zinc-800 hover:text-white"
+            className="flex-1 border-gray-300 bg-transparent text-gray-600 hover:bg-gray-100 hover:text-gray-900"
           >
             <X className="mr-2 h-4 w-4" />
             취소

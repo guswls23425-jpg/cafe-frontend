@@ -65,25 +65,25 @@ export function EventLog() {
   return (
     <div className="flex h-full flex-col gap-4">
       <div className="flex-1">
-        <h3 className="mb-3 text-sm font-medium text-white">실시간 좌석 활동 로그</h3>
-        <ScrollArea className="h-[280px] rounded-lg border border-zinc-800 bg-zinc-900/50 p-3">
+        <h3 className="mb-3 text-sm font-medium text-gray-900">실시간 좌석 활동 로그</h3>
+        <ScrollArea className="h-[280px] rounded-lg border border-gray-200 bg-white p-3">
           <div className="space-y-3">
             {mockEvents.map((event, index) => (
               <div key={index} className="flex items-start gap-3">
                 <div className={`mt-1.5 h-2 w-2 rounded-full ${statusColors[event.status]}`} />
                 <div className="flex-1 text-sm">
-                  <span className="text-zinc-500">{event.time}</span>
-                  <span className="mx-2 text-zinc-400">-</span>
-                  <span className="text-zinc-300">{event.message}</span>
+                  <span className="text-gray-400">{event.time}</span>
+                  <span className="mx-2 text-gray-400">-</span>
+                  <span className="text-gray-700">{event.message}</span>
                   <span
                     className={`ml-1 font-medium ${
                       event.status === "occupied"
-                        ? "text-emerald-400"
+                        ? "text-emerald-600"
                         : event.status === "away"
-                          ? "text-yellow-400"
+                          ? "text-yellow-600"
                           : event.status === "warning"
-                            ? "text-red-400"
-                            : "text-zinc-400"
+                            ? "text-red-500"
+                            : "text-gray-500"
                     }`}
                   >
                     {statusLabels[event.status]}
@@ -96,19 +96,19 @@ export function EventLog() {
       </div>
 
       <div>
-        <h3 className="mb-3 text-sm font-medium text-white">오늘의 시간대별 피크 점유율</h3>
-        <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-3">
+        <h3 className="mb-3 text-sm font-medium text-gray-900">오늘의 시간대별 피크 점유율</h3>
+        <div className="rounded-lg border border-gray-200 bg-white p-3">
           <ChartContainer config={chartConfig} className="h-[160px] w-full">
             <BarChart data={hourlyData}>
               <XAxis
                 dataKey="hour"
-                tick={{ fill: "#71717a", fontSize: 10 }}
-                axisLine={{ stroke: "#3f3f46" }}
+                tick={{ fill: "#6b7280", fontSize: 10 }}
+                axisLine={{ stroke: "#e5e7eb" }}
                 tickLine={false}
               />
               <YAxis
-                tick={{ fill: "#71717a", fontSize: 10 }}
-                axisLine={{ stroke: "#3f3f46" }}
+                tick={{ fill: "#6b7280", fontSize: 10 }}
+                axisLine={{ stroke: "#e5e7eb" }}
                 tickLine={false}
                 domain={[0, 100]}
               />

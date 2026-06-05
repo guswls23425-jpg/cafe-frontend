@@ -56,22 +56,22 @@ const createInitialTables = (): TableData[] => {
 
 const statusConfig = {
   active: {
-    bg: "bg-emerald-900/50",
-    border: "border-emerald-500",
+    bg: "bg-emerald-50",
+    border: "border-emerald-300",
     label: "사용중",
     dot: "bg-emerald-500",
   },
   away: {
-    bg: "bg-yellow-900/50",
-    border: "border-yellow-500",
+    bg: "bg-yellow-50",
+    border: "border-yellow-300",
     label: "자리비움",
     dot: "bg-yellow-500",
   },
   available: {
-    bg: "bg-zinc-900/50",
-    border: "border-zinc-800",
+    bg: "bg-gray-50",
+    border: "border-gray-200",
     label: "이용가능",
-    dot: "bg-zinc-500",
+    dot: "bg-gray-400",
   },
 }
 
@@ -119,18 +119,18 @@ const DraggableTable = memo(function DraggableTable({ table, onStatusChange, isE
     >
       {isEditMode && (
         <div className="absolute left-1/2 top-1 -translate-x-1/2">
-          <GripVertical className="h-4 w-4 text-zinc-500" />
+          <GripVertical className="h-4 w-4 text-gray-400" />
         </div>
       )}
       <div className="absolute right-2 top-2">
         <span className={`inline-block h-2 w-2 rounded-full ${config.dot}`} />
       </div>
       <div className="flex h-full flex-col items-center justify-center text-center">
-        <div className="text-sm font-semibold text-white">{table.name}</div>
-        <div className="mt-1 text-xs text-zinc-400">{config.label}</div>
+        <div className="text-sm font-semibold text-gray-900">{table.name}</div>
+        <div className="mt-1 text-xs text-gray-500">{config.label}</div>
         {table.awayTime && (
           <div
-            className={`mt-1 text-xs font-medium ${isWarning ? "text-red-400" : "text-yellow-500"}`}
+            className={`mt-1 text-xs font-medium ${isWarning ? "text-red-500" : "text-yellow-600"}`}
           >
             {table.awayTime}
           </div>
@@ -146,22 +146,22 @@ const TableOverlay = memo(function TableOverlay({ table }: { table: TableData })
 
   return (
     <div
-      style={{ 
-        width: TABLE_WIDTH, 
+      style={{
+        width: TABLE_WIDTH,
         height: TABLE_HEIGHT,
         willChange: "transform",
       }}
       className={`rounded-xl border p-3 shadow-2xl ${config.bg} ${config.border}`}
     >
       <div className="absolute left-1/2 top-1 -translate-x-1/2">
-        <GripVertical className="h-4 w-4 text-zinc-500" />
+        <GripVertical className="h-4 w-4 text-gray-400" />
       </div>
       <div className="absolute right-2 top-2">
         <span className={`inline-block h-2 w-2 rounded-full ${config.dot}`} />
       </div>
       <div className="flex h-full flex-col items-center justify-center text-center">
-        <div className="text-sm font-semibold text-white">{table.name}</div>
-        <div className="mt-1 text-xs text-zinc-400">{config.label}</div>
+        <div className="text-sm font-semibold text-gray-900">{table.name}</div>
+        <div className="mt-1 text-xs text-gray-500">{config.label}</div>
       </div>
     </div>
   )
@@ -193,18 +193,21 @@ export default function SeatManagementPage() {
 
       try {
         // ✨ 수정: 고정 '1'번 대신 진짜 로그인한 storedOwnerId로 백엔드 호출!
-        const response = await fetch(`http://localhost:8080/api/auth/${storedOwnerId}/cafe-name`);
+        const response = await fetch(`http://34.64.58.23:8080/api/auth/${storedOwnerId}/cafe-name`);
         
         if (response.ok) {
-          const name = await response.text(); 
-          setCafeName(name); 
+          const name = await response.text()
+          // JSON 따옴표 제거 후 설정
+          setCafeName(name.replace(/^"|"$/g, "").trim())
         } else {
-          console.error("해당 사장님의 카페 정보를 찾을 수 없습니다.");
-          setIsLoading(false);
+          console.error("카페 정보 조회 실패:", response.status)
+          setTables(createInitialTables())
+          setIsLoading(false)
         }
       } catch (error) {
-        console.error("사장님 정보를 가져오지 못했습니다:", error);
-        setIsLoading(false);
+        console.error("서버 연결 실패:", error)
+        setTables(createInitialTables())
+        setIsLoading(false)
       }
     };
 
@@ -221,21 +224,24 @@ export default function SeatManagementPage() {
       setIsLoading(true); // 통신 시작 로딩 ON
       
       try {
-        const response = await fetch(`http://localhost:8080/api/seats/search?cafeName=${encodeURIComponent(cafeName)}`);
+        const response = await fetch(`http://34.64.58.23:8080/api/seats/search?cafeName=${encodeURIComponent(cafeName)}`);
         
         if (response.ok) {
           const data = await response.json();
           
           if (data && data.length > 0) {
-            setTables(data);
-            setTableCount(data.length);
+            setTables(data)
+            setTableCount(data.length)
           } else {
-            setTables(createInitialTables()); 
+            setTables(createInitialTables())
           }
+        } else {
+          console.error("좌석 조회 실패 HTTP", response.status)
+          setTables(createInitialTables())
         }
       } catch (error) {
-        console.error("DB에서 좌석 정보를 불러오지 못했습니다:", error);
-        setTables(createInitialTables()); 
+        console.error("서버 연결 실패:", error)
+        setTables(createInitialTables())
       } finally {
         setIsLoading(false); // 통신 끝 로딩 OFF
       }
@@ -249,7 +255,7 @@ export default function SeatManagementPage() {
   // ------------------------------------------------------------------
   const handleSaveChanges = async () => {
     try {
-      const response = await fetch(`http://localhost:8080/api/seats/save?cafeName=${encodeURIComponent(cafeName)}`, {
+      const response = await fetch(`http://34.64.58.23:8080/api/seats/save?cafeName=${encodeURIComponent(cafeName)}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -407,23 +413,23 @@ export default function SeatManagementPage() {
   const activeTable = tables.find(t => t.id === activeId)
 
   return (
-    <div className="flex min-h-screen bg-zinc-950">
+    <div className="flex min-h-screen bg-gray-50">
       <SidebarNav />
-      
-      <main className="ml-64 flex-1 text-zinc-100">
+
+      <main className="ml-64 flex-1 text-gray-900">
         <HeaderStats />
-        
+
         <div className="space-y-6 p-6">
           <div className="grid gap-6 lg:grid-cols-3">
-            
+
             {/* Table Canvas Editor */}
             <div className="space-y-4 lg:col-span-2">
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <div>
-                  <h2 className="text-xl font-semibold text-white">자리현황표 관리</h2>
-                  <p className="mt-1 text-sm text-zinc-400">
-                    {isEditMode 
-                      ? "테이블을 드래그하여 위치를 변경하세요" 
+                  <h2 className="text-xl font-semibold text-gray-900">자리현황표 관리</h2>
+                  <p className="mt-1 text-sm text-gray-500">
+                    {isEditMode
+                      ? "테이블을 드래그하여 위치를 변경하세요"
                       : "테이블을 클릭하여 상태를 변경하세요"}
                   </p>
                 </div>
@@ -431,9 +437,9 @@ export default function SeatManagementPage() {
                   <Button
                     variant={isEditMode ? "default" : "outline"}
                     size="sm"
-                    className={isEditMode 
-                      ? "bg-emerald-600 text-white hover:bg-emerald-700" 
-                      : "border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-white"
+                    className={isEditMode
+                      ? "bg-emerald-600 text-white hover:bg-emerald-700"
+                      : "border-gray-300 bg-white text-gray-600 hover:bg-gray-100 hover:text-gray-900"
                     }
                     onClick={() => setIsEditMode(!isEditMode)}
                   >
@@ -449,11 +455,11 @@ export default function SeatManagementPage() {
                       </>
                     )}
                   </Button>
-                  <span className="text-sm text-zinc-400 ml-2">테이블 수: {tableCount}</span>
+                  <span className="text-sm text-gray-500 ml-2">테이블 수: {tableCount}</span>
                   <Button
                     variant="outline"
                     size="icon"
-                    className="h-8 w-8 border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-white"
+                    className="h-8 w-8 border-gray-300 bg-white text-gray-600 hover:bg-gray-100 hover:text-gray-900"
                     onClick={() => adjustTableCount(-1)}
                   >
                     <Minus className="h-4 w-4" />
@@ -461,7 +467,7 @@ export default function SeatManagementPage() {
                   <Button
                     variant="outline"
                     size="icon"
-                    className="h-8 w-8 border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-white"
+                    className="h-8 w-8 border-gray-300 bg-white text-gray-600 hover:bg-gray-100 hover:text-gray-900"
                     onClick={() => adjustTableCount(1)}
                   >
                     <Plus className="h-4 w-4" />
@@ -471,26 +477,25 @@ export default function SeatManagementPage() {
 
               {/* Legend */}
               <div className="flex flex-wrap items-center gap-4">
-                <span className="text-sm text-zinc-400">범례:</span>
+                <span className="text-sm text-gray-500">범례:</span>
                 <div className="flex items-center gap-2">
                   <span className="h-3 w-3 rounded-full bg-emerald-500" />
-                  <span className="text-sm text-zinc-300">사용중</span>
+                  <span className="text-sm text-gray-700">사용중</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="h-3 w-3 rounded-full bg-yellow-500" />
-                  <span className="text-sm text-zinc-300">자리비움</span>
+                  <span className="text-sm text-gray-700">자리비움</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="h-3 w-3 rounded-full bg-zinc-500" />
-                  <span className="text-sm text-zinc-300">이용가능</span>
+                  <span className="h-3 w-3 rounded-full bg-gray-400" />
+                  <span className="text-sm text-gray-700">이용가능</span>
                 </div>
               </div>
 
-              {/* 🟢 부드러운 다크 스켈레톤 로딩 조건식 복구 연동 */}
               {isLoading ? (
-                <div className="flex min-h-[500px] flex-col items-center justify-center rounded-xl border border-zinc-800 bg-zinc-900/30">
+                <div className="flex min-h-[500px] flex-col items-center justify-center rounded-xl border border-gray-200 bg-gray-100/50">
                   <Loader2 className="h-8 w-8 animate-spin text-emerald-500" />
-                  <p className="mt-3 text-sm text-zinc-400">최신 배치도를 불러오는 중...</p>
+                  <p className="mt-3 text-sm text-gray-500">최신 배치도를 불러오는 중...</p>
                 </div>
               ) : (
                 <DndContext 
@@ -498,20 +503,20 @@ export default function SeatManagementPage() {
                   onDragStart={handleDragStart}
                   onDragEnd={handleDragEnd}
                 >
-                  <div 
+                  <div
                     ref={canvasRef}
-                    className={`relative min-h-[500px] rounded-xl border bg-zinc-900/30 ${
-                      isEditMode ? "border-emerald-500/50" : "border-zinc-800"
+                    className={`relative min-h-[500px] rounded-xl border bg-gray-100/50 ${
+                      isEditMode ? "border-emerald-400" : "border-gray-200"
                     }`}
                     style={{
-                      backgroundImage: isEditMode 
-                        ? `radial-gradient(circle, rgba(63, 63, 70, 0.5) 1px, transparent 1px)`
+                      backgroundImage: isEditMode
+                        ? `radial-gradient(circle, rgba(156, 163, 175, 0.6) 1px, transparent 1px)`
                         : 'none',
                       backgroundSize: `${GRID_SIZE}px ${GRID_SIZE}px`,
                     }}
                   >
                     {isEditMode && (
-                      <div className="absolute left-4 top-4 rounded-lg bg-emerald-900/50 px-3 py-1.5 text-xs text-emerald-300">
+                      <div className="absolute left-4 top-4 rounded-lg bg-emerald-100 px-3 py-1.5 text-xs text-emerald-700 border border-emerald-200">
                         배치 편집 모드 - 테이블을 드래그하세요
                       </div>
                     )}
@@ -540,18 +545,18 @@ export default function SeatManagementPage() {
                   <Save className="mr-2 h-4 w-4" />
                   변경사항 저장
                 </Button>
-                <Button 
-                  variant="outline" 
-                  className="border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-white"
+                <Button
+                  variant="outline"
+                  className="border-gray-300 bg-white text-gray-600 hover:bg-gray-100 hover:text-gray-900"
                   onClick={resetAllToAvailable}
                 >
                   <RotateCcw className="mr-2 h-4 w-4" />
                   상태 초기화
                 </Button>
                 {isEditMode && (
-                  <Button 
-                    variant="outline" 
-                    className="border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-white"
+                  <Button
+                    variant="outline"
+                    className="border-gray-300 bg-white text-gray-600 hover:bg-gray-100 hover:text-gray-900"
                     onClick={resetPositions}
                   >
                     <RotateCcw className="mr-2 h-4 w-4" />
@@ -563,32 +568,32 @@ export default function SeatManagementPage() {
 
             {/* Guest Link Settings */}
             <div className="space-y-4">
-              <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-6">
-                <h3 className="mb-4 text-lg font-semibold text-white">손님 모드 설정</h3>
+              <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+                <h3 className="mb-4 text-lg font-semibold text-gray-900">손님 모드 설정</h3>
                 <div className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="cafe-display-name" className="text-zinc-300">표시될 카페명</Label>
+                    <Label htmlFor="cafe-display-name" className="text-gray-700">표시될 카페명</Label>
                     <Input
                       id="cafe-display-name"
                       value={cafeName}
                       onChange={(e) => setCafeName(e.target.value)}
                       placeholder="카페 이름"
-                      className="border-zinc-700 bg-zinc-800 text-white placeholder:text-zinc-500 focus-visible:ring-emerald-500"
+                      className="border-gray-300 bg-gray-50 text-gray-900 placeholder:text-gray-400 focus-visible:ring-emerald-500"
                     />
                   </div>
 
                   <div className="space-y-2">
-                    <Label className="text-zinc-300">손님 접속 링크</Label>
+                    <Label className="text-gray-700">손님 접속 링크</Label>
                     <div className="flex gap-2">
                       <Input
                         value={guestUrl}
                         readOnly
-                        className="border-zinc-700 bg-zinc-800 text-sm text-zinc-300 focus-visible:ring-emerald-500"
+                        className="border-gray-300 bg-gray-50 text-sm text-gray-600 focus-visible:ring-emerald-500"
                       />
-                      <Button 
-                        variant="outline" 
-                        size="icon" 
-                        className="border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-white shrink-0"
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="border-gray-300 bg-white text-gray-600 hover:bg-gray-100 hover:text-gray-900 shrink-0"
                         onClick={copyGuestLink}
                       >
                         <Copy className="h-4 w-4" />
@@ -601,7 +606,7 @@ export default function SeatManagementPage() {
 
                   <Button
                     variant="outline"
-                    className="w-full border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-white"
+                    className="w-full border-gray-300 bg-white text-gray-600 hover:bg-gray-100 hover:text-gray-900"
                     onClick={openGuestPreview}
                   >
                     <ExternalLink className="mr-2 h-4 w-4" />
@@ -610,10 +615,10 @@ export default function SeatManagementPage() {
                 </div>
               </div>
 
-              <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-6">
-                <h3 className="mb-3 text-lg font-semibold text-white">사용 안내</h3>
-                <ul className="space-y-2 text-sm text-zinc-400">
-                  <li>• <strong className="text-emerald-400">배치 편집</strong> 버튼을 눌러 테이블 위치를 조정하세요</li>
+              <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+                <h3 className="mb-3 text-lg font-semibold text-gray-900">사용 안내</h3>
+                <ul className="space-y-2 text-sm text-gray-500">
+                  <li>• <strong className="text-emerald-600">배치 편집</strong> 버튼을 눌러 테이블 위치를 조정하세요</li>
                   <li>• 편집 모드에서 테이블을 드래그하여 이동합니다</li>
                   <li>• 일반 모드에서 테이블을 클릭하면 상태가 변경됩니다</li>
                   <li>• 이용가능 → 사용중 → 자리비움 순으로 순환</li>

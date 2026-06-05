@@ -25,22 +25,22 @@ interface TableData {
 
 const statusConfig = {
   active: {
-    bg: "bg-emerald-900/50",
-    border: "border-emerald-500",
+    bg: "bg-emerald-50",
+    border: "border-emerald-300",
     label: "사용중",
     dot: "bg-emerald-500",
   },
   away: {
-    bg: "bg-yellow-900/50",
-    border: "border-yellow-500",
+    bg: "bg-yellow-50",
+    border: "border-yellow-300",
     label: "자리비움",
     dot: "bg-yellow-500",
   },
   available: {
-    bg: "bg-zinc-900/50",
-    border: "border-zinc-800",
+    bg: "bg-gray-50",
+    border: "border-gray-200",
     label: "이용가능",
-    dot: "bg-zinc-500",
+    dot: "bg-gray-400",
   },
 }
 
@@ -68,7 +68,7 @@ export default function GuestPage() {
     const fetchSeats = async () => {
       setIsLoading(true) // 🟢 조회 시작 시 로딩 ON
       try {
-        const response = await fetch(`http://localhost:8080/api/seats/search?cafeName=${encodeURIComponent(storedCafeName)}`);
+        const response = await fetch(`http://34.64.58.23:8080/api/seats/search?cafeName=${encodeURIComponent(storedCafeName)}`);
         
         if (response.ok) {
           const data = await response.json();
@@ -79,9 +79,15 @@ export default function GuestPage() {
             setShowInput(true);
             alert("카페 정보를 찾을 수 없습니다. 다시 입력해주세요.");
           }
+        } else {
+          console.error("좌석 조회 실패 HTTP", response.status);
+          sessionStorage.removeItem("guestCafeName");
+          setShowInput(true);
         }
       } catch (error) {
-        console.error("좌석 로딩 실패:", error);
+        console.error("서버 연결 실패:", error);
+        sessionStorage.removeItem("guestCafeName");
+        setShowInput(true);
       } finally {
         setIsLoading(false) // 🟢 성공하든 실패하든 로딩 OFF
       }
@@ -98,7 +104,7 @@ export default function GuestPage() {
     setIsLoading(true) // 검색 시에도 로딩 처리
 
     try {
-      const response = await fetch(`http://localhost:8080/api/seats/search?cafeName=${encodeURIComponent(inputName)}`);
+      const response = await fetch(`http://34.64.58.23:8080/api/seats/search?cafeName=${encodeURIComponent(inputName)}`);
       
       if (response.ok) {
         const data = await response.json();
@@ -123,24 +129,24 @@ export default function GuestPage() {
   // 🟢 1단계 방어선: 카페 이름 입력창 우선 렌더링
   if (showInput) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-zinc-950 px-4">
-        <div className="w-full max-w-md rounded-xl border border-zinc-800 bg-zinc-900 p-8">
+      <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
+        <div className="w-full max-w-md rounded-xl border border-gray-200 bg-white p-8 shadow-md">
           <div className="mb-6 text-center">
             <Coffee className="mx-auto mb-2 h-8 w-8 text-emerald-500" />
-            <h2 className="text-xl font-semibold text-white">손님 모드</h2>
-            <p className="mt-1 text-sm text-zinc-400">카페 이름을 입력하세요</p>
+            <h2 className="text-xl font-semibold text-gray-900">손님 모드</h2>
+            <p className="mt-1 text-sm text-gray-500">카페 이름을 입력하세요</p>
           </div>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label className="text-zinc-300">카페명</Label>
+              <Label className="text-gray-700">카페명</Label>
               <div className="relative">
-                <Store className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+                <Store className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                 <Input
                   type="text"
                   placeholder="예: 메가커피 강남점"
                   value={inputValue}
                   onChange={(e) => setInputValue(e.target.value)}
-                  className="border-zinc-700 bg-zinc-800 pl-10 text-white placeholder:text-zinc-500 focus-visible:ring-emerald-500"
+                  className="border-gray-300 bg-gray-50 pl-10 text-gray-900 placeholder:text-gray-400 focus-visible:ring-emerald-500"
                   autoFocus
                 />
               </div>
@@ -153,9 +159,9 @@ export default function GuestPage() {
               {isLoading ? "조회 중..." : "좌석 현황 보기"} <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
           </form>
-          <div className="mt-4 text-center text-sm text-zinc-400">
+          <div className="mt-4 text-center text-sm text-gray-500">
             관리자이신가요?{" "}
-            <Link href="/login" className="text-emerald-500 hover:text-emerald-400">
+            <Link href="/login" className="text-emerald-500 hover:text-emerald-600">
               로그인하기
             </Link>
           </div>
@@ -164,12 +170,11 @@ export default function GuestPage() {
     )
   }
 
-  // 🟢 2단계 방어선: 데이터를 긁어오는 도중일 때 띄워줄 다크 로딩 인디케이터
   if (isLoading) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-zinc-950 text-white">
+      <div className="flex min-h-screen flex-col items-center justify-center bg-gray-50 text-gray-700">
         <Loader2 className="h-10 w-10 animate-spin text-emerald-500" />
-        <p className="mt-4 text-zinc-400 text-sm">실시간 좌석 배치도를 불러오는 중...</p>
+        <p className="mt-4 text-gray-500 text-sm">실시간 좌석 배치도를 불러오는 중...</p>
       </div>
     )
   }
@@ -179,13 +184,13 @@ export default function GuestPage() {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100">
+    <div className="min-h-screen bg-gray-50 text-gray-900">
       {/* Header */}
-      <header className="sticky top-0 z-50 border-b border-zinc-800 bg-zinc-950/80 backdrop-blur-sm">
+      <header className="sticky top-0 z-50 border-b border-gray-200 bg-white/80 backdrop-blur-sm">
         <div className="mx-auto flex h-16 max-w-5xl items-center justify-between px-4">
           <div className="flex items-center gap-3">
             <Link href="/">
-              <Button variant="ghost" size="icon" className="text-zinc-400 hover:bg-zinc-800 hover:text-white">
+              <Button variant="ghost" size="icon" className="text-gray-500 hover:bg-gray-100 hover:text-gray-900">
                 <ArrowLeft className="h-5 w-5" />
               </Button>
             </Link>
@@ -193,49 +198,49 @@ export default function GuestPage() {
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500">
                 <Coffee className="h-4 w-4 text-white" />
               </div>
-              <span className="text-lg font-semibold text-white">{cafeName}</span>
+              <span className="text-lg font-semibold text-gray-900">{cafeName}</span>
             </div>
           </div>
-          <div className="text-sm text-zinc-400">손님 모드</div>
+          <div className="text-sm text-gray-500">손님 모드</div>
         </div>
       </header>
 
       <main className="mx-auto max-w-5xl px-4 py-8">
         {/* Stats Summary */}
         <div className="mb-8 grid grid-cols-3 gap-4">
-          <div className="rounded-xl border border-emerald-500/30 bg-emerald-900/20 p-4 text-center">
+          <div className="rounded-xl border border-emerald-300 bg-emerald-50 p-4 text-center">
             <div className="text-3xl font-bold text-emerald-500">{availableCount}</div>
-            <div className="text-sm text-zinc-400">이용가능</div>
+            <div className="text-sm text-gray-500">이용가능</div>
           </div>
-          <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4 text-center">
-            <div className="text-3xl font-bold text-white">{activeCount}</div>
-            <div className="text-sm text-zinc-400">사용중</div>
+          <div className="rounded-xl border border-gray-200 bg-white p-4 text-center shadow-sm">
+            <div className="text-3xl font-bold text-gray-900">{activeCount}</div>
+            <div className="text-sm text-gray-500">사용중</div>
           </div>
-          <div className="rounded-xl border border-yellow-500/30 bg-yellow-900/20 p-4 text-center">
+          <div className="rounded-xl border border-yellow-300 bg-yellow-50 p-4 text-center">
             <div className="text-3xl font-bold text-yellow-500">{awayCount}</div>
-            <div className="text-sm text-zinc-400">자리비움</div>
+            <div className="text-sm text-gray-500">자리비움</div>
           </div>
         </div>
 
         {/* Legend */}
         <div className="mb-6 flex flex-wrap items-center gap-4">
-          <span className="text-sm text-zinc-400">범례:</span>
+          <span className="text-sm text-gray-500">범례:</span>
           <div className="flex items-center gap-2">
             <span className="h-3 w-3 rounded-full bg-emerald-500" />
-            <span className="text-sm text-zinc-300">사용중</span>
+            <span className="text-sm text-gray-700">사용중</span>
           </div>
           <div className="flex items-center gap-2">
             <span className="h-3 w-3 rounded-full bg-yellow-500" />
-            <span className="text-sm text-zinc-300">자리비움</span>
+            <span className="text-sm text-gray-700">자리비움</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="h-3 w-3 rounded-full bg-zinc-500" />
-            <span className="text-sm text-zinc-300">이용가능</span>
+            <span className="h-3 w-3 rounded-full bg-gray-400" />
+            <span className="text-sm text-gray-700">이용가능</span>
           </div>
         </div>
 
         {/* Table Canvas View (Read-Only) */}
-        <div className="relative min-h-[500px] w-full overflow-auto rounded-xl border border-zinc-800 bg-zinc-900/30">
+        <div className="relative min-h-[500px] w-full overflow-auto rounded-xl border border-gray-200 bg-gray-100/50">
           {tables.map((table) => {
             // 💡 범례 방어선 설정 (혹시 다 대문자로 오거나 빈 값이 와도 에러 안 나게 처리)
             const statusKey = (table.status?.toLowerCase() || "available") as TableStatus
@@ -262,10 +267,10 @@ export default function GuestPage() {
                 
                 {/* 중앙 텍스트 정보 */}
                 <div className="flex h-full flex-col items-center justify-center text-center">
-                  <div className="text-sm font-semibold text-white">{table.name}</div>
-                  <div className="mt-1 text-xs text-zinc-400">{config.label}</div>
+                  <div className="text-sm font-semibold text-gray-900">{table.name}</div>
+                  <div className="mt-1 text-xs text-gray-500">{config.label}</div>
                   {table.awayTime && (
-                    <div className={`mt-1 text-xs font-medium ${isWarning ? "text-red-400" : "text-yellow-500"}`}>
+                    <div className={`mt-1 text-xs font-medium ${isWarning ? "text-red-500" : "text-yellow-600"}`}>
                       {table.awayTime}
                     </div>
                   )}
@@ -276,7 +281,7 @@ export default function GuestPage() {
         </div>
 
         {/* Info */}
-        <div className="mt-8 rounded-xl border border-zinc-800 bg-zinc-900/30 p-4 text-center text-sm text-zinc-400">
+        <div className="mt-8 rounded-xl border border-gray-200 bg-white p-4 text-center text-sm text-gray-500 shadow-sm">
           <p>실시간 좌석 현황은 AI가 자동으로 업데이트합니다.</p>
           <p className="mt-1">자리비움 상태의 좌석은 곧 이용 가능할 수 있습니다.</p>
         </div>

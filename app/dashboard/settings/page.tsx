@@ -8,7 +8,7 @@ import {
 export default function SettingsPage() {
   return (
     // 🌟 1. min-h-screen 대신 h-screen과 overflow-hidden으로 모니터 화면 크기에 딱 고정!
-    <div className="flex h-screen bg-zinc-950 overflow-hidden">
+    <div className="flex h-screen bg-gray-50 overflow-hidden">
       <SidebarNav />
       
       {/* 🌟 2. main에 flex flex-col을 주어 내부 요소들이 세로로 차곡차곡 쌓이게 만듦 */}
@@ -18,7 +18,7 @@ export default function SettingsPage() {
         
         {/* 🌟 3. p-6 영역에 flex-1 flex flex-col min-h-0을 주어, 헤더를 제외한 '남은 세로 공간'을 싹 다 가져감 */}
         <div className="p-6 flex-1 flex flex-col min-h-0">
-          <h2 className="mb-6 text-xl font-semibold text-white flex-none">
+          <h2 className="mb-6 text-xl font-semibold text-gray-900 flex-none">
             시스템 설정 및 카메라 구성
           </h2>
           

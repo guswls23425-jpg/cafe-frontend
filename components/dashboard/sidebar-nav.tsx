@@ -51,10 +51,10 @@ export function SidebarNav() {
   }
 
   return (
-    <aside className="fixed left-0 top-0 z-40 flex h-screen w-64 flex-col border-r border-zinc-800 bg-zinc-950">
-      <div className="flex h-16 items-center gap-2 border-b border-zinc-800 px-6">
+    <aside className="fixed left-0 top-0 z-40 flex h-screen w-64 flex-col border-r border-gray-200 bg-white">
+      <div className="flex h-16 items-center gap-2 border-b border-gray-200 px-6">
         <Coffee className="h-6 w-6 text-emerald-500" />
-        <span className="text-lg font-semibold text-white">카페모니터</span>
+        <span className="text-lg font-semibold text-gray-900">카페모니터</span>
       </div>
       <nav className="flex-1 space-y-1 p-4">
         {navItems.map((item) => {
@@ -66,8 +66,8 @@ export function SidebarNav() {
               className={cn(
                 "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
                 isActive
-                  ? "bg-zinc-800 text-white"
-                  : "text-zinc-400 hover:bg-zinc-800/50 hover:text-white"
+                  ? "bg-emerald-50 text-emerald-700"
+                  : "text-gray-500 hover:bg-gray-100 hover:text-gray-900"
               )}
             >
               <item.icon className="h-5 w-5" />
@@ -76,10 +76,10 @@ export function SidebarNav() {
           )
         })}
       </nav>
-      <div className="border-t border-zinc-800 p-4">
+      <div className="border-t border-gray-200 p-4">
         <button
           onClick={handleLogout}
-          className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-zinc-400 transition-colors hover:bg-zinc-800/50 hover:text-white"
+          className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900"
         >
           <LogOut className="h-5 w-5" />
           로그아웃

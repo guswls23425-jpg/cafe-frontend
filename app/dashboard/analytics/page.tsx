@@ -9,12 +9,12 @@ import {
 
 export default function AnalyticsPage() {
   return (
-    <div className="flex min-h-screen bg-zinc-950">
+    <div className="flex min-h-screen bg-gray-50">
       <SidebarNav />
       <main className="ml-64 flex-1">
         <HeaderStats />
         <div className="space-y-6 p-6">
-          <h2 className="text-xl font-semibold text-white">분석 및 인사이트</h2>
+          <h2 className="text-xl font-semibold text-gray-900">분석 및 인사이트</h2>
           
           {/* 주간 추이 차트 */}
           <WeeklyTrendsChart />
