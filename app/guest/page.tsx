@@ -146,54 +146,79 @@ export default function GuestPage() {
     const fetchSeats = async () => {
       setIsLoading(true)
       try {
-        // 1) localStorage에서 층 구조 미리 로드 (관리자가 저장한 층 목록)
-        let floorStructure: Array<{ id: number; label: string }> | null = null
+        // ── 1. localStorage에서 전체 배치 레이아웃 로드 (위치 정보 기준) ──
+        let layoutFloors: Array<{ id: number; label: string; tables: TableData[] }> | null = null
         try {
-          const raw = localStorage.getItem(`cafemonitor-floor-structure-${storedCafeName}`)
-          if (raw) floorStructure = JSON.parse(raw)
+          const raw = localStorage.getItem(`cafemonitor-floor-layout-${storedCafeName}`)
+          if (raw) layoutFloors = JSON.parse(raw)
         } catch {}
 
-        // 2) floors API 시도
-        let floorsData: Array<{ id: number; label: string; tables: TableData[] }> | null = null
+        // ── 2. 서버에서 실시간 상태 로드 ──────────────────────────────────
+        // floors API 시도
+        let serverFloors: Array<{ id: number; tables: TableData[] }> | null = null
         const floorsRes = await fetch(
           `http://34.64.58.23:8080/api/seats/floors?cafeName=${encodeURIComponent(storedCafeName)}`
         )
         if (floorsRes.ok) {
           const raw: Array<{ floorNumber: number; label: string; seats: TableData[] }> = await floorsRes.json()
           if (raw && raw.length > 0) {
-            floorsData = raw.map(f => ({ id: f.floorNumber, label: f.label, tables: f.seats ?? [] }))
+            serverFloors = raw.map(f => ({ id: f.floorNumber, tables: f.seats ?? [] }))
           }
         }
-
-        // 3) floors API 실패 → search API 폴백 + floorNumber로 그룹화
-        if (!floorsData) {
+        // floors API 실패 → search API 폴백
+        if (!serverFloors) {
           const searchRes = await fetch(
             `http://34.64.58.23:8080/api/seats/search?cafeName=${encodeURIComponent(storedCafeName)}`
           )
           if (searchRes.ok) {
             const seats: TableData[] = await searchRes.json()
             if (seats && seats.length > 0) {
-              floorsData = groupSeatsByFloor(seats)
+              serverFloors = groupSeatsByFloor(seats).map(f => ({ id: f.id, tables: f.tables }))
             }
           }
         }
 
-        // 4) localStorage 층 구조와 병합
-        //    → localStorage에 있는 층은 모두 표시, 좌석 데이터는 서버에서 채움
-        if (floorStructure && floorStructure.length > 0) {
-          const seatMap = new Map<number, TableData[]>(
-            (floorsData ?? []).map(f => [f.id, f.tables])
-          )
-          floorsData = floorStructure.map(f => ({
+        // ── 3. 레이아웃(위치) + 서버(상태) 병합 ──────────────────────────
+        let finalFloors: Array<{ id: number; label: string; tables: TableData[] }> | null = null
+
+        if (layoutFloors && layoutFloors.length > 0) {
+          // localStorage 레이아웃 기준으로 층 구성, 서버 상태를 name 기준으로 덮어씀
+          const serverStatusMap = new Map<string, { status: string; awayTime?: string; personCount: number }>()
+          for (const sf of serverFloors ?? []) {
+            for (const t of sf.tables) {
+              serverStatusMap.set(t.name, {
+                status: t.status,
+                awayTime: t.awayTime,
+                personCount: t.personCount ?? 0,
+              })
+            }
+          }
+          finalFloors = layoutFloors.map(f => ({
             id: f.id,
             label: f.label,
-            tables: seatMap.get(f.id) ?? [],
+            tables: f.tables.map(t => {
+              const live = serverStatusMap.get(t.name)
+              return live ? { ...t, status: live.status as TableData["status"], awayTime: live.awayTime, personCount: live.personCount } : t
+            }),
           }))
+        } else if (serverFloors && serverFloors.length > 0) {
+          // localStorage 없음 → 서버 데이터만 사용 (floors API는 label 포함)
+          const floorsRes2 = await fetch(
+            `http://34.64.58.23:8080/api/seats/floors?cafeName=${encodeURIComponent(storedCafeName)}`
+          )
+          if (floorsRes2.ok) {
+            const raw: Array<{ floorNumber: number; label: string; seats: TableData[] }> = await floorsRes2.json()
+            finalFloors = raw.map(f => ({ id: f.floorNumber, label: f.label, tables: f.seats ?? [] }))
+          } else {
+            finalFloors = groupSeatsByFloor(
+              serverFloors.flatMap(f => f.tables)
+            )
+          }
         }
 
-        if (floorsData && floorsData.length > 0) {
-          setFloors(floorsData)
-          setActiveFloorId(floorsData[0].id)
+        if (finalFloors && finalFloors.length > 0) {
+          setFloors(finalFloors)
+          setActiveFloorId(finalFloors[0].id)
         } else {
           sessionStorage.removeItem("guestCafeName")
           setShowInput(true)
@@ -216,52 +241,62 @@ export default function GuestPage() {
     if (!inputName) return
     setIsLoading(true)
     try {
-      let floorsData: Array<{ id: number; label: string; tables: TableData[] }> | null = null
+      // localStorage 레이아웃 로드
+      let layoutFloors: Array<{ id: number; label: string; tables: TableData[] }> | null = null
+      try {
+        const raw = localStorage.getItem(`cafemonitor-floor-layout-${inputName}`)
+        if (raw) layoutFloors = JSON.parse(raw)
+      } catch {}
 
+      // 서버 상태 로드
+      let serverFloors: Array<{ id: number; tables: TableData[] }> | null = null
       const floorsRes = await fetch(
         `http://34.64.58.23:8080/api/seats/floors?cafeName=${encodeURIComponent(inputName)}`
       )
       if (floorsRes.ok) {
         const raw: Array<{ floorNumber: number; label: string; seats: TableData[] }> = await floorsRes.json()
         if (raw && raw.length > 0) {
-          floorsData = raw.map(f => ({ id: f.floorNumber, label: f.label, tables: f.seats ?? [] }))
+          serverFloors = raw.map(f => ({ id: f.floorNumber, tables: f.seats ?? [] }))
         }
       }
-
-      // 폴백: search API + floorNumber 그룹화
-      if (!floorsData) {
+      if (!serverFloors) {
         const searchRes = await fetch(
           `http://34.64.58.23:8080/api/seats/search?cafeName=${encodeURIComponent(inputName)}`
         )
         if (searchRes.ok) {
           const seats: TableData[] = await searchRes.json()
           if (seats && seats.length > 0) {
-            floorsData = groupSeatsByFloor(seats)
+            serverFloors = groupSeatsByFloor(seats).map(f => ({ id: f.id, tables: f.tables }))
           }
         }
       }
 
-      // localStorage 층 구조와 병합
-      try {
-        const raw = localStorage.getItem(`cafemonitor-floor-structure-${inputName}`)
-        if (raw) {
-          const floorStructure: Array<{ id: number; label: string }> = JSON.parse(raw)
-          const seatMap = new Map<number, TableData[]>(
-            (floorsData ?? []).map(f => [f.id, f.tables])
-          )
-          floorsData = floorStructure.map(f => ({
-            id: f.id,
-            label: f.label,
-            tables: seatMap.get(f.id) ?? [],
-          }))
+      // 레이아웃 + 서버 상태 병합
+      let finalFloors: Array<{ id: number; label: string; tables: TableData[] }> | null = null
+      if (layoutFloors && layoutFloors.length > 0) {
+        const statusMap = new Map<string, { status: string; awayTime?: string; personCount: number }>()
+        for (const sf of serverFloors ?? []) {
+          for (const t of sf.tables) {
+            statusMap.set(t.name, { status: t.status, awayTime: t.awayTime, personCount: t.personCount ?? 0 })
+          }
         }
-      } catch {}
+        finalFloors = layoutFloors.map(f => ({
+          id: f.id,
+          label: f.label,
+          tables: f.tables.map(t => {
+            const live = statusMap.get(t.name)
+            return live ? { ...t, status: live.status as TableData["status"], awayTime: live.awayTime, personCount: live.personCount } : t
+          }),
+        }))
+      } else if (serverFloors) {
+        finalFloors = groupSeatsByFloor(serverFloors.flatMap(f => f.tables))
+      }
 
-      if (floorsData && floorsData.length > 0) {
+      if (finalFloors && finalFloors.length > 0) {
         sessionStorage.setItem("guestCafeName", inputName)
         setCafeName(inputName)
-        setFloors(floorsData)
-        setActiveFloorId(floorsData[0].id)
+        setFloors(finalFloors)
+        setActiveFloorId(finalFloors[0].id)
         setShowInput(false)
       } else {
         alert("🚨 등록되지 않은 카페이거나, 아직 좌석 배치가 완료되지 않았습니다.\n카페 이름을 다시 확인해주세요!")
@@ -404,12 +439,14 @@ export default function GuestPage() {
 
         {/* 배치도 캔버스 (읽기 전용 + 스크롤) */}
         <div className="h-[500px] overflow-auto rounded-xl border border-gray-200">
+          {/* key={activeFloorId} → 층 전환 시 강제 리마운트로 이전 층 잔상 방지 */}
           <div
+            key={activeFloorId}
             className="relative bg-gray-100/50"
             style={{ width: 1200, height: 900 }}
           >
             {tables.map((table) => (
-              <TableCard key={table.id} table={table} />
+              <TableCard key={`${activeFloorId}-${table.id}`} table={table} />
             ))}
           </div>
         </div>

@@ -415,12 +415,16 @@ export default function SeatManagementPage() {
       }
 
       if (saved) {
-        // 층 구조를 카페명 기반 키로 localStorage에 저장 → 게스트 페이지에서 읽음
+        // 전체 층별 배치 데이터를 localStorage에 저장 → 게스트 페이지에서 위치 정보 사용
         try {
-          const floorStructure = floors.map(f => ({ id: f.id, label: f.label }))
+          localStorage.setItem(
+            `cafemonitor-floor-layout-${cafeName}`,
+            JSON.stringify(floors.map(f => ({ id: f.id, label: f.label, tables: f.tables })))
+          )
+          // 하위 호환: 구조 키도 유지
           localStorage.setItem(
             `cafemonitor-floor-structure-${cafeName}`,
-            JSON.stringify(floorStructure)
+            JSON.stringify(floors.map(f => ({ id: f.id, label: f.label })))
           )
         } catch {}
         alert("🎉 배치 정보가 저장되었습니다!")
