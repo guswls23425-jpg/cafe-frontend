@@ -15,7 +15,7 @@ import {
   useSensors,
 } from "@dnd-kit/core"
 import { CSS } from "@dnd-kit/utilities"
-import { Minus, Plus, Save, RotateCcw, GripVertical, Lock, Unlock, Loader2 } from "lucide-react"
+import { Save, RotateCcw, GripVertical, Lock, Unlock, Loader2, ChevronUp, ChevronDown, Minus, Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { HeaderStats } from "@/components/dashboard/header-stats"
@@ -94,22 +94,25 @@ const GRID_SIZE = 20
 const TABLE_WIDTH = 120
 const TABLE_HEIGHT = 100
 const ICON_SIZE = Math.round(TABLE_WIDTH / 6) // 20px
-const PERSON_ROW_HEIGHT = ICON_SIZE + 8       // 아이콘 + 여백
+const PERSON_ROW_HEIGHT = ICON_SIZE + 16      // 아이콘 + 상하 여백
 
-// 사람 아이콘 SVG (첨부 이미지와 동일한 실루엣)
+// 사람 실루엣 아이콘
 function PersonIcon({ size, filled }: { size: number; filled: boolean }) {
   return (
     <svg
       width={size}
       height={size}
       viewBox="0 0 24 24"
-      fill={filled ? "currentColor" : "none"}
-      stroke={filled ? "none" : "currentColor"}
-      strokeWidth={1.5}
-      className={filled ? "text-gray-700" : "text-gray-300"}
+      className={filled ? "text-gray-800" : "text-gray-300"}
     >
-      <circle cx="12" cy="7" r="4" />
-      <path d="M4 21c0-4 3.6-7 8-7s8 3 8 7" />
+      {/* 머리 */}
+      <circle cx="12" cy="7" r="4.5" fill="currentColor" />
+      {/* 몸통 */}
+      <path
+        d="M3 22c0-5 4-9 9-9s9 4 9 9"
+        fill="currentColor"
+        clipPath="inset(0 0 2px 0)"
+      />
     </svg>
   )
 }
@@ -223,36 +226,38 @@ const DraggableTable = memo(function DraggableTable({
         </div>
       </div>
 
-      {/* 인원 아이콘 행 */}
+      {/* 인원 표시 패널 */}
       <div
-        className="mt-1 flex items-center justify-center gap-0.5"
+        className="mt-1 flex items-center justify-between rounded-lg border border-gray-200 bg-white px-2"
         style={{ height: PERSON_ROW_HEIGHT }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* 감소 버튼 */}
-        <button
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={(e) => { e.stopPropagation(); onPersonCountChange(table.id, -1) }}
-          className="flex h-4 w-4 items-center justify-center rounded text-gray-400 hover:bg-gray-200 hover:text-gray-700 disabled:opacity-30"
-          disabled={table.personCount === 0}
-        >
-          <Minus className="h-2.5 w-2.5" />
-        </button>
+        {/* 아이콘 4개 */}
+        <div className="flex items-center gap-0.5">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <PersonIcon key={i} size={ICON_SIZE} filled={i < table.personCount} />
+          ))}
+        </div>
 
-        {/* 사람 아이콘 4개 */}
-        {Array.from({ length: 4 }).map((_, i) => (
-          <PersonIcon key={i} size={ICON_SIZE} filled={i < table.personCount} />
-        ))}
-
-        {/* 증가 버튼 */}
-        <button
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={(e) => { e.stopPropagation(); onPersonCountChange(table.id, 1) }}
-          className="flex h-4 w-4 items-center justify-center rounded text-gray-400 hover:bg-gray-200 hover:text-gray-700 disabled:opacity-30"
-          disabled={table.personCount === 4}
-        >
-          <Plus className="h-2.5 w-2.5" />
-        </button>
+        {/* 위/아래 버튼 세로 배치 */}
+        <div className="flex flex-col">
+          <button
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => { e.stopPropagation(); onPersonCountChange(table.id, 1) }}
+            disabled={table.personCount === 4}
+            className="flex h-4 w-4 items-center justify-center rounded text-gray-400 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-25"
+          >
+            <ChevronUp className="h-3 w-3" />
+          </button>
+          <button
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => { e.stopPropagation(); onPersonCountChange(table.id, -1) }}
+            disabled={table.personCount === 0}
+            className="flex h-4 w-4 items-center justify-center rounded text-gray-400 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-25"
+          >
+            <ChevronDown className="h-3 w-3" />
+          </button>
+        </div>
       </div>
     </div>
   )
@@ -279,10 +284,19 @@ const TableOverlay = memo(function TableOverlay({ table }: { table: TableData })
           <div className="mt-1 text-xs text-gray-500">{config.label}</div>
         </div>
       </div>
-      <div className="mt-1 flex items-center justify-center gap-0.5" style={{ height: PERSON_ROW_HEIGHT }}>
-        {Array.from({ length: 4 }).map((_, i) => (
-          <PersonIcon key={i} size={ICON_SIZE} filled={i < table.personCount} />
-        ))}
+      <div
+        className="mt-1 flex items-center justify-between rounded-lg border border-gray-200 bg-white px-2"
+        style={{ height: PERSON_ROW_HEIGHT }}
+      >
+        <div className="flex items-center gap-0.5">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <PersonIcon key={i} size={ICON_SIZE} filled={i < table.personCount} />
+          ))}
+        </div>
+        <div className="flex flex-col opacity-40">
+          <ChevronUp className="h-3 w-3 text-gray-400" />
+          <ChevronDown className="h-3 w-3 text-gray-400" />
+        </div>
       </div>
     </div>
   )
