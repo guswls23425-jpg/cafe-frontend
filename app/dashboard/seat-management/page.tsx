@@ -251,6 +251,13 @@ export default function SeatManagementPage() {
   const [activeFloorId, setActiveFloorId] = useState<number>(1)
   const [nextFloorId, setNextFloorId] = useState(2) // 고유 id 생성용
 
+  // floors 변경 시 localStorage에 자동 저장
+  const FLOORS_KEY = "cafemonitor-floors"
+  useEffect(() => {
+    if (floors.length === 1 && floors[0].tables.length === 0) return // 초기값은 저장 안 함
+    try { localStorage.setItem(FLOORS_KEY, JSON.stringify({ floors, activeFloorId, nextFloorId })) } catch {}
+  }, [floors, activeFloorId, nextFloorId])
+
   // 현재 층 데이터
   const currentFloor = floors.find(f => f.id === activeFloorId) ?? floors[0]
   const tables = currentFloor?.tables ?? []
@@ -297,6 +304,20 @@ export default function SeatManagementPage() {
   // ── [2] 카페 이름 확인 후 층별 좌석 로딩 ────────────────────────────────────
   useEffect(() => {
     if (!cafeName) return
+
+    // localStorage에 저장된 층 구조가 있으면 먼저 복구 (로딩 전 즉시 반영)
+    try {
+      const cached = localStorage.getItem(FLOORS_KEY)
+      if (cached) {
+        const parsed = JSON.parse(cached) as { floors: FloorData[]; activeFloorId: number; nextFloorId: number }
+        if (parsed.floors && parsed.floors.length > 0) {
+          setFloors(parsed.floors)
+          setActiveFloorId(parsed.activeFloorId)
+          setNextFloorId(parsed.nextFloorId)
+        }
+      }
+    } catch {}
+
     const fetchAllFloors = async () => {
       setIsLoading(true)
       try {
@@ -332,9 +353,13 @@ export default function SeatManagementPage() {
         }
 
         if (loaded) {
+          const newActiveId = loaded[0].id
+          const newNextId = Math.max(...loaded.map(f => f.id)) + 1
           setFloors(loaded)
-          setActiveFloorId(loaded[0].id)
-          setNextFloorId(Math.max(...loaded.map(f => f.id)) + 1)
+          setActiveFloorId(newActiveId)
+          setNextFloorId(newNextId)
+          // API에서 받은 최신 데이터를 localStorage에도 반영
+          try { localStorage.setItem(FLOORS_KEY, JSON.stringify({ floors: loaded, activeFloorId: newActiveId, nextFloorId: newNextId })) } catch {}
         }
       } catch {
         // 연결 실패 시 초기값(1층) 유지
@@ -371,8 +396,13 @@ export default function SeatManagementPage() {
         if (fallbackRes.ok) saved = true
       }
 
-      if (saved) alert("🎉 배치 정보가 저장되었습니다!")
-      else alert("🚨 저장 실패: 서버 오류가 발생했습니다.")
+      if (saved) {
+        // 서버 저장 성공 시 localStorage도 최신화
+        try { localStorage.setItem(FLOORS_KEY, JSON.stringify({ floors, activeFloorId, nextFloorId })) } catch {}
+        alert("🎉 배치 정보가 저장되었습니다!")
+      } else {
+        alert("🚨 저장 실패: 서버 오류가 발생했습니다.")
+      }
     } catch {
       alert("🚨 서버와 연결할 수 없습니다.")
     }
