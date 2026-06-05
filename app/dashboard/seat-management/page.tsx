@@ -352,17 +352,45 @@ export default function SeatManagementPage() {
           }
         }
 
-        // floors API 실패 or 서버에 데이터 없음 → 구 search API로 1층 데이터만 보완
+        // floors API 실패 or 서버에 데이터 없음 → 구 search API 폴백
         const searchRes = await fetch(
           `http://34.64.58.23:8080/api/seats/search?cafeName=${encodeURIComponent(cafeName)}`
         )
         if (searchRes.ok) {
           const seats: TableData[] = await searchRes.json()
           if (seats && seats.length > 0) {
-            // 1층 테이블만 교체, 나머지 층 구조는 localStorage 유지
-            setFloors(localFloors.map(f =>
-              f.id === 1 ? { ...f, tables: seats, tableCount: seats.length } : f
-            ))
+            // floorNumber가 있으면 층별로 분배, 없으면 상태(status)만 업데이트
+            const byFloor = new Map<number, TableData[]>()
+            let hasFloorInfo = false
+            for (const s of seats) {
+              const fn = (s as TableData & { floorNumber?: number }).floorNumber
+              if (fn && fn > 1) hasFloorInfo = true
+              const key = fn ?? 1
+              if (!byFloor.has(key)) byFloor.set(key, [])
+              byFloor.get(key)!.push(s)
+            }
+
+            if (hasFloorInfo) {
+              // floorNumber 정보가 있음 → 층별로 분배
+              setFloors(localFloors.map(f => {
+                const serverTables = byFloor.get(f.id)
+                return serverTables
+                  ? { ...f, tables: serverTables, tableCount: serverTables.length }
+                  : f
+              }))
+            } else {
+              // floorNumber 없음 (구 DB) → 위치는 localStorage 유지, 상태만 덮어씀
+              const statusMap = new Map(seats.map(s => [s.name, s]))
+              setFloors(localFloors.map(f => ({
+                ...f,
+                tables: f.tables.map(t => {
+                  const live = statusMap.get(t.name)
+                  return live
+                    ? { ...t, status: live.status, awayTime: live.awayTime, personCount: live.personCount ?? 0 }
+                    : t
+                }),
+              })))
+            }
             setIsLoading(false)
             return
           }
