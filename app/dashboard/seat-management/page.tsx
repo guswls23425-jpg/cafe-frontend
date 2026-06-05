@@ -201,62 +201,65 @@ const DraggableTable = memo(function DraggableTable({
       {...(isEditMode ? { ...attributes, ...listeners } : {})}
       className={isEditMode ? "cursor-move" : "cursor-pointer"}
     >
-      {/* 테이블 카드 */}
+      {/* 하나의 카드로 통합 */}
       <div
-        className={`relative rounded-xl border p-3 transition-colors ${config.bg} ${config.border}`}
-        style={{ height: TABLE_HEIGHT }}
-        onClick={() => !isEditMode && onStatusChange(table.id)}
+        className={`flex flex-col overflow-hidden rounded-xl border transition-colors ${config.bg} ${config.border}`}
+        style={{ height: TOTAL_HEIGHT }}
       >
-        {isEditMode && (
-          <div className="absolute left-1/2 top-1 -translate-x-1/2">
-            <GripVertical className="h-4 w-4 text-gray-400" />
+        {/* 윗부분: 테이블 정보 */}
+        <div
+          className="relative flex flex-1 flex-col items-center justify-center text-center px-3"
+          onClick={() => !isEditMode && onStatusChange(table.id)}
+        >
+          {isEditMode && (
+            <div className="absolute left-1/2 top-1 -translate-x-1/2">
+              <GripVertical className="h-4 w-4 text-gray-400" />
+            </div>
+          )}
+          <div className="absolute right-2 top-2">
+            <span className={`inline-block h-2 w-2 rounded-full ${config.dot}`} />
           </div>
-        )}
-        <div className="absolute right-2 top-2">
-          <span className={`inline-block h-2 w-2 rounded-full ${config.dot}`} />
-        </div>
-        <div className="flex h-full flex-col items-center justify-center text-center">
           <div className="text-sm font-semibold text-gray-900">{table.name}</div>
-          <div className="mt-1 text-xs text-gray-500">{config.label}</div>
+          <div className="mt-0.5 text-xs text-gray-500">{config.label}</div>
           {table.awayTime && (
-            <div className={`mt-1 text-xs font-medium ${isWarning ? "text-red-500" : "text-yellow-600"}`}>
+            <div className={`mt-0.5 text-xs font-medium ${isWarning ? "text-red-500" : "text-yellow-600"}`}>
               {table.awayTime}
             </div>
           )}
         </div>
-      </div>
 
-      {/* 인원 표시 패널 */}
-      <div
-        className="mt-1 flex items-center justify-between rounded-lg border border-gray-200 bg-white px-2"
-        style={{ height: PERSON_ROW_HEIGHT }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* 아이콘 4개 */}
-        <div className="flex items-center gap-0.5">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <PersonIcon key={i} size={ICON_SIZE} filled={i < table.personCount} />
-          ))}
-        </div>
+        {/* 구분선 */}
+        <div className={`h-px w-full ${config.border} border-t`} />
 
-        {/* 위/아래 버튼 세로 배치 */}
-        <div className="flex flex-col">
-          <button
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => { e.stopPropagation(); onPersonCountChange(table.id, 1) }}
-            disabled={table.personCount === 4}
-            className="flex h-4 w-4 items-center justify-center rounded text-gray-400 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-25"
-          >
-            <ChevronUp className="h-3 w-3" />
-          </button>
-          <button
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => { e.stopPropagation(); onPersonCountChange(table.id, -1) }}
-            disabled={table.personCount === 0}
-            className="flex h-4 w-4 items-center justify-center rounded text-gray-400 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-25"
-          >
-            <ChevronDown className="h-3 w-3" />
-          </button>
+        {/* 아랫부분: 인원 아이콘 */}
+        <div
+          className="flex items-center justify-between px-2 bg-white/60"
+          style={{ height: PERSON_ROW_HEIGHT }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-center gap-0.5">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <PersonIcon key={i} size={ICON_SIZE} filled={i < table.personCount} />
+            ))}
+          </div>
+          <div className="flex flex-col">
+            <button
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => { e.stopPropagation(); onPersonCountChange(table.id, 1) }}
+              disabled={table.personCount === 4}
+              className="flex h-4 w-4 items-center justify-center rounded text-gray-400 hover:bg-gray-200 hover:text-gray-700 disabled:opacity-25"
+            >
+              <ChevronUp className="h-3 w-3" />
+            </button>
+            <button
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => { e.stopPropagation(); onPersonCountChange(table.id, -1) }}
+              disabled={table.personCount === 0}
+              className="flex h-4 w-4 items-center justify-center rounded text-gray-400 hover:bg-gray-200 hover:text-gray-700 disabled:opacity-25"
+            >
+              <ChevronDown className="h-3 w-3" />
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -268,24 +271,23 @@ const TableOverlay = memo(function TableOverlay({ table }: { table: TableData })
   const config = statusConfig[statusKey] || statusConfig.available
 
   return (
-    <div style={{ width: TABLE_WIDTH, height: TOTAL_HEIGHT, willChange: "transform" }}>
-      <div
-        className={`relative rounded-xl border p-3 shadow-2xl ${config.bg} ${config.border}`}
-        style={{ height: TABLE_HEIGHT }}
-      >
+    <div
+      style={{ width: TABLE_WIDTH, height: TOTAL_HEIGHT, willChange: "transform" }}
+      className={`flex flex-col overflow-hidden rounded-xl border shadow-2xl ${config.bg} ${config.border}`}
+    >
+      <div className="relative flex flex-1 flex-col items-center justify-center px-3 text-center">
         <div className="absolute left-1/2 top-1 -translate-x-1/2">
           <GripVertical className="h-4 w-4 text-gray-400" />
         </div>
         <div className="absolute right-2 top-2">
           <span className={`inline-block h-2 w-2 rounded-full ${config.dot}`} />
         </div>
-        <div className="flex h-full flex-col items-center justify-center text-center">
-          <div className="text-sm font-semibold text-gray-900">{table.name}</div>
-          <div className="mt-1 text-xs text-gray-500">{config.label}</div>
-        </div>
+        <div className="text-sm font-semibold text-gray-900">{table.name}</div>
+        <div className="mt-0.5 text-xs text-gray-500">{config.label}</div>
       </div>
+      <div className={`h-px w-full border-t ${config.border}`} />
       <div
-        className="mt-1 flex items-center justify-between rounded-lg border border-gray-200 bg-white px-2"
+        className="flex items-center justify-between bg-white/60 px-2"
         style={{ height: PERSON_ROW_HEIGHT }}
       >
         <div className="flex items-center gap-0.5">
