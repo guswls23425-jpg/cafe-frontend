@@ -332,29 +332,27 @@ export default function GuestPage() {
           ))}
         </div>
 
-        {/* 층 탭 (읽기 전용) */}
-        {floors.length > 1 && (
-          <div className="mb-4 flex flex-wrap items-center gap-2">
-            {floors.map((floor) => {
-              const isActive = activeFloorId === floor.id
-              return (
-                <button
-                  key={floor.id}
-                  type="button"
-                  onClick={() => setActiveFloorId(floor.id)}
-                  className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-medium transition-colors ${
-                    isActive
-                      ? "border-emerald-500 bg-white text-emerald-600"
-                      : "border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:text-gray-700"
-                  }`}
-                >
-                  <Building2 className={`h-3.5 w-3.5 shrink-0 ${isActive ? "text-emerald-500" : "text-gray-400"}`} />
-                  {floor.label}
-                </button>
-              )
-            })}
-          </div>
-        )}
+        {/* 층 선택 탭 */}
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          {floors.map((floor) => {
+            const isActive = activeFloorId === floor.id
+            return (
+              <button
+                key={floor.id}
+                type="button"
+                onClick={() => setActiveFloorId(floor.id)}
+                className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-medium transition-colors ${
+                  isActive
+                    ? "border-emerald-500 bg-white text-emerald-600"
+                    : "border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:text-gray-700"
+                }`}
+              >
+                <Building2 className={`h-3.5 w-3.5 shrink-0 ${isActive ? "text-emerald-500" : "text-gray-400"}`} />
+                {floor.label}
+              </button>
+            )
+          })}
+        </div>
 
         {/* 배치도 캔버스 (읽기 전용 + 스크롤) */}
         <div className="h-[500px] overflow-auto rounded-xl border border-gray-200">
