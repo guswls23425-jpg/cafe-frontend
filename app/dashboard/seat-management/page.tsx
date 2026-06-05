@@ -494,40 +494,48 @@ export default function SeatManagementPage() {
               </div>
 
               {/* ── 층 탭 바 ─────────────────────────────────────────────── */}
-              <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white p-2 shadow-sm">
-                <Building2 className="h-4 w-4 shrink-0 text-gray-400" />
-                <div className="flex flex-1 flex-wrap items-center gap-1.5">
-                  {floors.map((floor) => (
-                    <div key={floor.id} className="flex items-center">
+              <div className="flex flex-wrap items-center gap-2">
+                {floors.map((floor) => {
+                  const isActive = activeFloorId === floor.id
+                  return (
+                    <div
+                      key={floor.id}
+                      className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 transition-colors ${
+                        isActive
+                          ? "border-emerald-500 bg-white text-emerald-600"
+                          : "border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:text-gray-700"
+                      }`}
+                    >
+                      <Building2 className={`h-3.5 w-3.5 shrink-0 ${isActive ? "text-emerald-500" : "text-gray-400"}`} />
                       <button
                         onClick={() => setActiveFloorId(floor.id)}
-                        className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-                          activeFloorId === floor.id
-                            ? "bg-emerald-600 text-white shadow-sm"
-                            : "text-gray-600 hover:bg-gray-100"
-                        }`}
+                        className="text-sm font-medium leading-none"
                       >
                         {floor.label}
                       </button>
                       {floors.length > 1 && (
                         <button
                           onClick={() => removeFloor(floor.id)}
-                          className="ml-0.5 flex h-5 w-5 items-center justify-center rounded-full text-gray-300 hover:bg-red-50 hover:text-red-500"
-                          title={`${floor.label} 삭제`}
+                          className={`ml-0.5 flex h-4 w-4 items-center justify-center rounded-full transition-colors ${
+                            isActive
+                              ? "text-emerald-400 hover:bg-emerald-100 hover:text-emerald-600"
+                              : "text-gray-300 hover:bg-gray-100 hover:text-gray-500"
+                          }`}
                         >
-                          <X className="h-3 w-3" />
+                          <X className="h-2.5 w-2.5" />
                         </button>
                       )}
                     </div>
-                  ))}
-                </div>
-                {/* 층 추가 버튼 */}
+                  )
+                })}
+
+                {/* + 층 추가 */}
                 <button
                   onClick={addFloor}
-                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-dashed border-gray-300 text-gray-400 hover:border-emerald-400 hover:bg-emerald-50 hover:text-emerald-600"
-                  title="층 추가"
+                  className="flex items-center gap-1.5 rounded-full border border-dashed border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-400 transition-colors hover:border-emerald-400 hover:text-emerald-500"
                 >
-                  <Plus className="h-4 w-4" />
+                  <Plus className="h-3.5 w-3.5" />
+                  층 추가
                 </button>
               </div>
 
