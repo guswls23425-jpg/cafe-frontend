@@ -479,6 +479,19 @@ export default function SeatManagementPage() {
     const next = floors.filter(f => f.id !== floorId)
     if (activeFloorId === floorId) setActiveFloorId(next[next.length - 1].id)
     setFloors(next)
+    // localStorage 즉시 갱신 → 게스트 페이지에서 삭제된 층이 보이지 않도록
+    if (cafeName) {
+      try {
+        localStorage.setItem(
+          `cafemonitor-floor-layout-${cafeName}`,
+          JSON.stringify(next.map(f => ({ id: f.id, label: f.label, tables: f.tables })))
+        )
+        localStorage.setItem(
+          `cafemonitor-floor-structure-${cafeName}`,
+          JSON.stringify(next.map(f => ({ id: f.id, label: f.label })))
+        )
+      } catch {}
+    }
     syncFloorsToServer(next)
   }
 
