@@ -246,10 +246,28 @@ export default function SeatManagementPage() {
   const [activeId, setActiveId] = useState<number | null>(null)
   const canvasRef = useRef<HTMLDivElement>(null)
 
-  // 층 관리 상태
-  const [floors, setFloors] = useState<FloorData[]>([createFloor(1, 1)])
-  const [activeFloorId, setActiveFloorId] = useState<number>(1)
-  const [nextFloorId, setNextFloorId] = useState(2) // 고유 id 생성용
+  // 층 관리 상태 — 초기값을 localStorage에서 복구
+  const FLOORS_STORAGE_KEY = "cafemonitor-floors-v2"
+
+  const loadFloorsFromStorage = (): { floors: FloorData[]; activeFloorId: number; nextFloorId: number } | null => {
+    try {
+      const raw = localStorage.getItem(FLOORS_STORAGE_KEY)
+      if (!raw) return null
+      return JSON.parse(raw)
+    } catch { return null }
+  }
+
+  const cached = loadFloorsFromStorage()
+  const [floors, setFloors] = useState<FloorData[]>(cached?.floors ?? [createFloor(1, 1)])
+  const [activeFloorId, setActiveFloorId] = useState<number>(cached?.activeFloorId ?? 1)
+  const [nextFloorId, setNextFloorId] = useState(cached?.nextFloorId ?? 2)
+
+  // floors가 변경될 때마다 localStorage에 저장
+  useEffect(() => {
+    try {
+      localStorage.setItem(FLOORS_STORAGE_KEY, JSON.stringify({ floors, activeFloorId, nextFloorId }))
+    } catch {}
+  }, [floors, activeFloorId, nextFloorId])
 
 
   // 현재 층 데이터
@@ -302,7 +320,9 @@ export default function SeatManagementPage() {
     const fetchAllFloors = async () => {
       setIsLoading(true)
       try {
-        let loaded: FloorData[] | null = null
+        // localStorage의 층 구조를 기준으로 유지하면서, 서버의 테이블 데이터만 병합
+        const storageData = loadFloorsFromStorage()
+        const localFloors: FloorData[] = storageData?.floors ?? [createFloor(1, 1)]
 
         // 신규 floors API 시도
         const floorsRes = await fetch(
@@ -310,43 +330,53 @@ export default function SeatManagementPage() {
         )
         if (floorsRes.ok) {
           const data: Array<{ floorNumber: number; label: string; seats: TableData[] }> = await floorsRes.json()
-          if (data && data.length > 0) {
-            loaded = data.map(f => ({
+          const serverHasRealData = data && data.some(f => (f.seats ?? []).length > 0)
+
+          if (serverHasRealData) {
+            // 서버에 실제 데이터가 있으면 서버 기준으로 교체
+            const merged = data.map(f => ({
               id: f.floorNumber,
               label: f.label,
               tables: f.seats ?? [],
               tableCount: (f.seats ?? []).length,
             }))
+            // 단, localStorage에만 있는 추가 층(빈 층)도 유지
+            const serverIds = new Set(merged.map(f => f.id))
+            const localOnly = localFloors.filter(f => !serverIds.has(f.id))
+            const combined = [...merged, ...localOnly].sort((a, b) => a.id - b.id)
+            setFloors(combined)
+            setActiveFloorId(combined[0].id)
+            setNextFloorId(Math.max(...combined.map(f => f.id)) + 1)
+            setIsLoading(false)
+            return
           }
         }
 
-        // 폴백: 구 search API
-        if (!loaded) {
-          const searchRes = await fetch(
-            `http://34.64.58.23:8080/api/seats/search?cafeName=${encodeURIComponent(cafeName)}`
-          )
-          if (searchRes.ok) {
-            const seats: TableData[] = await searchRes.json()
-            if (seats && seats.length > 0) {
-              loaded = [{ id: 1, label: "1층", tables: seats, tableCount: seats.length }]
-            }
+        // floors API 실패 or 서버에 데이터 없음 → 구 search API로 1층 데이터만 보완
+        const searchRes = await fetch(
+          `http://34.64.58.23:8080/api/seats/search?cafeName=${encodeURIComponent(cafeName)}`
+        )
+        if (searchRes.ok) {
+          const seats: TableData[] = await searchRes.json()
+          if (seats && seats.length > 0) {
+            // 1층 테이블만 교체, 나머지 층 구조는 localStorage 유지
+            setFloors(localFloors.map(f =>
+              f.id === 1 ? { ...f, tables: seats, tableCount: seats.length } : f
+            ))
+            setIsLoading(false)
+            return
           }
         }
 
-        if (loaded) {
-          const newActiveId = loaded[0].id
-          const newNextId = Math.max(...loaded.map(f => f.id)) + 1
-          setFloors(loaded)
-          setActiveFloorId(newActiveId)
-          setNextFloorId(newNextId)
-        }
+        // 모든 API 실패 → localStorage 복구 상태 그대로 유지
       } catch {
-        // 연결 실패 시 초기값(1층) 유지
+        // 네트워크 오류 → localStorage 복구 상태 유지
       } finally {
         setIsLoading(false)
       }
     }
     fetchAllFloors()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cafeName])
 
   // ── [3] 저장 (신규 floors API → 폴백: 구 save API) ──────────────────────
