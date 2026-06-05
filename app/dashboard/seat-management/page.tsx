@@ -100,7 +100,7 @@ function createInitialTables(count = 16): TableData[] {
 }
 
 function createFloor(id: number, index: number): FloorData {
-  return { id, label: `${index}층`, tables: createInitialTables(), tableCount: 16 }
+  return { id, label: `${index}층`, tables: [], tableCount: 0 }
 }
 
 // ─── 아이콘 ───────────────────────────────────────────────────────────────────
@@ -247,7 +247,7 @@ export default function SeatManagementPage() {
   const canvasRef = useRef<HTMLDivElement>(null)
 
   // 층 관리 상태 — 초기값을 localStorage에서 복구
-  const FLOORS_STORAGE_KEY = "cafemonitor-floors-v2"
+  const FLOORS_STORAGE_KEY = "cafemonitor-floors-v3"
 
   const loadFloorsFromStorage = (): { floors: FloorData[]; activeFloorId: number; nextFloorId: number } | null => {
     try {
@@ -368,9 +368,15 @@ export default function SeatManagementPage() {
           }
         }
 
-        // 모든 API 실패 → localStorage 복구 상태 그대로 유지
+        // 모든 API 실패 + localStorage도 비어있음 → 1층에만 기본 테이블 생성
+        if (!storageData) {
+          setFloors([{ id: 1, label: "1층", tables: createInitialTables(), tableCount: 16 }])
+        }
       } catch {
         // 네트워크 오류 → localStorage 복구 상태 유지
+        if (!loadFloorsFromStorage()) {
+          setFloors([{ id: 1, label: "1층", tables: createInitialTables(), tableCount: 16 }])
+        }
       } finally {
         setIsLoading(false)
       }
