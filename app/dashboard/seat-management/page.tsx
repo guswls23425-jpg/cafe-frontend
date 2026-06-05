@@ -15,12 +15,68 @@ import {
   useSensors,
 } from "@dnd-kit/core"
 import { CSS } from "@dnd-kit/utilities"
-import { Minus, Plus, Save, RotateCcw, Copy, ExternalLink, GripVertical, Lock, Unlock, Loader2 } from "lucide-react"
+import { Minus, Plus, Save, RotateCcw, GripVertical, Lock, Unlock, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import { HeaderStats } from "@/components/dashboard/header-stats"
 import { SidebarNav } from "@/components/dashboard/sidebar-nav"
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+} from "@/components/ui/chart"
+import { BarChart, Bar, XAxis, YAxis } from "recharts"
+
+const mockEvents = [
+  { time: "14:23", message: "테이블 3", status: "away" as const },
+  { time: "14:20", message: "테이블 9 제한 시간 초과", status: "warning" as const },
+  { time: "14:15", message: "테이블 5 자동 해제됨", status: "released" as const },
+  { time: "14:10", message: "테이블 7", status: "away" as const },
+  { time: "14:02", message: "테이블 12", status: "occupied" as const },
+  { time: "13:55", message: "테이블 2", status: "occupied" as const },
+  { time: "13:48", message: "테이블 8", status: "away" as const },
+  { time: "13:42", message: "테이블 8 자동 해제됨", status: "released" as const },
+  { time: "13:35", message: "테이블 4", status: "occupied" as const },
+  { time: "13:28", message: "테이블 11", status: "occupied" as const },
+]
+
+const logStatusColors = {
+  occupied: "bg-emerald-500",
+  away: "bg-yellow-500",
+  released: "bg-gray-400",
+  warning: "bg-red-500",
+}
+
+const logStatusLabels = {
+  occupied: "[사용중]",
+  away: "[자리비움]",
+  released: "[해제됨]",
+  warning: "[경고]",
+}
+
+const logStatusTextColors = {
+  occupied: "text-emerald-600",
+  away: "text-yellow-600",
+  released: "text-gray-500",
+  warning: "text-red-500",
+}
+
+const hourlyData = [
+  { hour: "9시", occupancy: 45 },
+  { hour: "10시", occupancy: 62 },
+  { hour: "11시", occupancy: 78 },
+  { hour: "12시", occupancy: 95 },
+  { hour: "13시", occupancy: 88 },
+  { hour: "14시", occupancy: 75 },
+  { hour: "15시", occupancy: 68 },
+  { hour: "16시", occupancy: 82 },
+  { hour: "17시", occupancy: 90 },
+  { hour: "18시", occupancy: 85 },
+]
+
+const chartConfig = {
+  occupancy: { label: "점유율 %", color: "#22c55e" },
+}
 
 type TableStatus = "active" | "away" | "available"
 
@@ -173,7 +229,6 @@ export default function SeatManagementPage() {
   const [isLoading, setIsLoading] = useState(true) // 🟢 로딩 상태 전격 복구!
   const [tableCount, setTableCount] = useState(16)
   const [cafeName, setCafeName] = useState("")
-  const [copied, setCopied] = useState(false)
   const [isEditMode, setIsEditMode] = useState(false)
   const [activeId, setActiveId] = useState<number | null>(null)
   const canvasRef = useRef<HTMLDivElement>(null)
@@ -279,13 +334,6 @@ export default function SeatManagementPage() {
     useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } }),
     useSensor(KeyboardSensor)
   )
-
-  const openGuestPreview = () => {
-    if (typeof window !== "undefined") {
-      sessionStorage.setItem("guestCafeName", cafeName)
-      window.open("/guest", "_blank")
-    }
-  }
 
   const snapToGrid = (value: number) => Math.round(value / GRID_SIZE) * GRID_SIZE
 
@@ -394,20 +442,6 @@ export default function SeatManagementPage() {
         }
       })
     )
-  }
-
-  const guestUrl = typeof window !== "undefined" 
-    ? `${window.location.origin}/guest`
-    : "/guest"
-
-  const copyGuestLink = async () => {
-    try {
-      await navigator.clipboard.writeText(guestUrl)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    } catch (err) {
-      console.error("Failed to copy:", err)
-    }
   }
 
   const activeTable = tables.find(t => t.id === activeId)
@@ -567,63 +601,52 @@ export default function SeatManagementPage() {
             </div>
 
             {/* Guest Link Settings */}
-            <div className="space-y-4">
-              <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-                <h3 className="mb-4 text-lg font-semibold text-gray-900">손님 모드 설정</h3>
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="cafe-display-name" className="text-gray-700">표시될 카페명</Label>
-                    <Input
-                      id="cafe-display-name"
-                      value={cafeName}
-                      onChange={(e) => setCafeName(e.target.value)}
-                      placeholder="카페 이름"
-                      className="border-gray-300 bg-gray-50 text-gray-900 placeholder:text-gray-400 focus-visible:ring-emerald-500"
-                    />
+            <div className="flex flex-col gap-4">
+              {/* 실시간 좌석 활동 로그 */}
+              <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+                <h3 className="mb-3 text-sm font-medium text-gray-900">실시간 좌석 활동 로그</h3>
+                <ScrollArea className="h-[280px] rounded-lg border border-gray-200 bg-gray-50 p-3">
+                  <div className="space-y-3">
+                    {mockEvents.map((event, index) => (
+                      <div key={index} className="flex items-start gap-3">
+                        <div className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${logStatusColors[event.status]}`} />
+                        <div className="flex-1 text-sm">
+                          <span className="text-gray-400">{event.time}</span>
+                          <span className="mx-2 text-gray-400">-</span>
+                          <span className="text-gray-700">{event.message}</span>
+                          <span className={`ml-1 font-medium ${logStatusTextColors[event.status]}`}>
+                            {logStatusLabels[event.status]}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-
-                  <div className="space-y-2">
-                    <Label className="text-gray-700">손님 접속 링크</Label>
-                    <div className="flex gap-2">
-                      <Input
-                        value={guestUrl}
-                        readOnly
-                        className="border-gray-300 bg-gray-50 text-sm text-gray-600 focus-visible:ring-emerald-500"
-                      />
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        className="border-gray-300 bg-white text-gray-600 hover:bg-gray-100 hover:text-gray-900 shrink-0"
-                        onClick={copyGuestLink}
-                      >
-                        <Copy className="h-4 w-4" />
-                      </Button>
-                    </div>
-                    {copied && (
-                      <p className="text-sm text-emerald-500">링크가 복사되었습니다!</p>
-                    )}
-                  </div>
-
-                  <Button
-                    variant="outline"
-                    className="w-full border-gray-300 bg-white text-gray-600 hover:bg-gray-100 hover:text-gray-900"
-                    onClick={openGuestPreview}
-                  >
-                    <ExternalLink className="mr-2 h-4 w-4" />
-                    손님 화면 미리보기
-                  </Button>
-                </div>
+                </ScrollArea>
               </div>
 
-              <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-                <h3 className="mb-3 text-lg font-semibold text-gray-900">사용 안내</h3>
-                <ul className="space-y-2 text-sm text-gray-500">
-                  <li>• <strong className="text-emerald-600">배치 편집</strong> 버튼을 눌러 테이블 위치를 조정하세요</li>
-                  <li>• 편집 모드에서 테이블을 드래그하여 이동합니다</li>
-                  <li>• 일반 모드에서 테이블을 클릭하면 상태가 변경됩니다</li>
-                  <li>• 이용가능 → 사용중 → 자리비움 순으로 순환</li>
-                  <li>• 손님 모드에서는 상태 변경이 불가능합니다</li>
-                </ul>
+              {/* 시간대별 점유율 차트 */}
+              <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+                <h3 className="mb-3 text-sm font-medium text-gray-900">오늘의 시간대별 점유율</h3>
+                <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                  <ChartContainer config={chartConfig} className="h-[160px] w-full">
+                    <BarChart data={hourlyData}>
+                      <XAxis
+                        dataKey="hour"
+                        tick={{ fill: "#6b7280", fontSize: 10 }}
+                        axisLine={{ stroke: "#e5e7eb" }}
+                        tickLine={false}
+                      />
+                      <YAxis
+                        tick={{ fill: "#6b7280", fontSize: 10 }}
+                        axisLine={{ stroke: "#e5e7eb" }}
+                        tickLine={false}
+                        domain={[0, 100]}
+                      />
+                      <ChartTooltip content={<ChartTooltipContent />} />
+                      <Bar dataKey="occupancy" fill="#22c55e" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ChartContainer>
+                </div>
               </div>
             </div>
             
