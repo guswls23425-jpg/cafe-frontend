@@ -53,7 +53,7 @@ export default function LoginPage() {
         localStorage.setItem("cafeName", data.cafeName);
   
         alert(data.message);
-        router.push("/dashboard"); // 대시보드로 이동
+        router.push("/dashboard/seat-management");
       } else {
         // 로그인 실패 시 (상태코드 401 등)
         setIsLoading(false)

@@ -2,11 +2,10 @@
 
 import Link from "next/link"
 import { useRouter, usePathname } from "next/navigation"
-import { 
-  LayoutDashboard, 
+import {
   Grid,
-  BarChart3, 
-  Settings, 
+  BarChart3,
+  Settings,
   Coffee,
   LogOut
 } from "lucide-react"
@@ -14,13 +13,8 @@ import { cn } from "@/lib/utils"
 
 const navItems = [
   {
-    title: "대시보드",
-    href: "/dashboard",
-    icon: LayoutDashboard,
-  },
-  {
     title: "좌석 관리",
-    href: "/dashboard/seat-management", 
+    href: "/dashboard/seat-management",
     icon: Grid,
   },
   {
