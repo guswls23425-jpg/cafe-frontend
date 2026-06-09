@@ -1,23 +1,26 @@
 "use client"
 
-// 🌟 1. useEffect를 추가로 불러옵니다.
-import { useState, useEffect } from "react" 
-import { Camera, Save, X, Link2, MessageSquare, Bell } from "lucide-react"
+import { useState, useEffect, useCallback } from "react"
+import { Camera, Save, X, Link2, MessageSquare, Bell, RefreshCw } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Slider } from "@/components/ui/slider"
 
+const BACKEND_URL = "http://34.64.58.23:8080"
+
 export function CameraFeedSimulator() {
-  const BACKEND_URL = "http://34.64.58.23:8080"
-  
-  // 🌟 2. 일반 변수였던 streamUrl을 useState로 바꿉니다. 처음엔 꼬리표 없이 시작!
-  const [streamUrl, setStreamUrl] = useState(`${BACKEND_URL}/api/video/stream`)
+  const [streamUrl, setStreamUrl] = useState<string | null>(null)
   const [hasError, setHasError] = useState(false)
 
-  // 🌟 3. 화면이 다 그려진 직후(클라이언트 측)에 꼬리표(시간)를 딱! 붙여줍니다.
+  // 서버사이드 렌더링 방지: 클라이언트에서만 URL 설정
   useEffect(() => {
+    setStreamUrl(`${BACKEND_URL}/api/video/stream?t=${Date.now()}`)
+  }, [])
+
+  const handleRetry = useCallback(() => {
+    setHasError(false)
     setStreamUrl(`${BACKEND_URL}/api/video/stream?t=${Date.now()}`)
   }, [])
 
@@ -37,22 +40,33 @@ export function CameraFeedSimulator() {
 
         {/* 비디오 컨테이너 */}
         <div className="relative flex-1 min-h-0 w-full aspect-video overflow-hidden rounded-lg border border-gray-300 bg-gray-900 flex items-center justify-center shadow-inner">
-          <div className="relative w-full max-h-full aspect-video flex-shrink-0 bg-gray-800"></div>
-          
-          {/* 바탕에 깔리는 실제 카메라 피드 */}
-          {!hasError ? (
+
+          {/* 실제 카메라 피드 */}
+          {streamUrl && !hasError ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={streamUrl}
               alt="AI Live Stream"
-              className="absolute inset-0 w-full h-full object-cover z-0"
+              className="absolute inset-0 w-full h-full object-cover"
               onError={() => setHasError(true)}
             />
-          ) : (
-            <div className="z-0 flex flex-col items-center justify-center text-gray-400">
-              <Camera className="h-10 w-10 mb-2 opacity-30" />
+          ) : hasError ? (
+            <div className="flex flex-col items-center justify-center gap-3 text-gray-400">
+              <Camera className="h-10 w-10 opacity-30" />
               <p className="text-sm">비디오 스트림에 연결할 수 없습니다.</p>
-              <p className="text-xs mt-1">AI 서버 상태를 확인해 주세요.</p>
+              <p className="text-xs">AI 서버 상태를 확인해 주세요.</p>
+              <button
+                onClick={handleRetry}
+                className="mt-1 flex items-center gap-1.5 rounded-md border border-gray-600 px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-700 transition-colors"
+              >
+                <RefreshCw className="h-3 w-3" />
+                재연결 시도
+              </button>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center gap-2 text-gray-500">
+              <Camera className="h-8 w-8 opacity-40" />
+              <p className="text-sm">스트림 연결 중...</p>
             </div>
           )}
 

@@ -17,7 +17,7 @@ import {
 import { CSS } from "@dnd-kit/utilities"
 import {
   Save, RotateCcw, GripVertical, Lock, Unlock, Loader2,
-  ChevronUp, ChevronDown, Minus, Plus, X, Building2,
+  ChevronUp, ChevronDown, Minus, Plus, X, Building2, AlertTriangle, MessageCircleWarning,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -29,6 +29,12 @@ import {
   ChartTooltipContent,
 } from "@/components/ui/chart"
 import { BarChart, Bar, XAxis, YAxis } from "recharts"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 
 // ─── 이벤트 로그 / 차트 데이터 ────────────────────────────────────────────────
 const mockEvents = [
@@ -55,8 +61,19 @@ const hourlyData = [
 ]
 const chartConfig = { occupancy: { label:"점유율 %", color:"#22c55e" } }
 
+// ─── AI 로그 타입 ─────────────────────────────────────────────────────────────
+interface AiLog {
+  id: number
+  status: string
+  rawAiStatus: string
+  statusLabel: string
+  awayTime: string
+  statusDuration: number | null
+  createdAt: string
+}
+
 // ─── 테이블 / 층 타입 ─────────────────────────────────────────────────────────
-type TableStatus = "active" | "away" | "available"
+type TableStatus = "active" | "away" | "available" | "cleaning"
 
 interface TableData {
   id: number
@@ -118,6 +135,15 @@ const statusConfig = {
   active:    { bg:"bg-emerald-50", border:"border-emerald-300", label:"사용중",   dot:"bg-emerald-500" },
   away:      { bg:"bg-yellow-50",  border:"border-yellow-300",  label:"자리비움", dot:"bg-yellow-500"  },
   available: { bg:"bg-gray-50",    border:"border-gray-200",    label:"이용가능", dot:"bg-gray-400"    },
+  cleaning:  { bg:"bg-red-50",     border:"border-red-400",     label:"청소필요", dot:"bg-red-500"     },
+}
+
+// ─── AI 로그 상태 표시용 ──────────────────────────────────────────────────────
+const aiLogStatusStyle: Record<string, { color: string; label: string }> = {
+  active:    { color: "bg-emerald-500", label: "사용중" },
+  available: { color: "bg-gray-400",   label: "이용가능" },
+  away:      { color: "bg-yellow-500", label: "자리비움" },
+  cleaning:  { color: "bg-red-500",    label: "청소필요" },
 }
 
 // ─── DraggableTable ───────────────────────────────────────────────────────────
@@ -125,11 +151,12 @@ interface DraggableTableProps {
   table: TableData
   onStatusChange: (id: number) => void
   onPersonCountChange: (id: number, delta: number) => void
+  onLogOpen: (table: TableData) => void
   isEditMode: boolean
 }
 
 const DraggableTable = memo(function DraggableTable({
-  table, onStatusChange, onPersonCountChange, isEditMode,
+  table, onStatusChange, onPersonCountChange, onLogOpen, isEditMode,
 }: DraggableTableProps) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: table.id,
@@ -138,6 +165,7 @@ const DraggableTable = memo(function DraggableTable({
   const statusKey = (table.status?.toLowerCase() || "available") as TableStatus
   const config = statusConfig[statusKey] || statusConfig.available
   const isWarning = statusKey === "away" && table.awayTime && parseInt(table.awayTime.split(":")[0]) >= 5
+  const isCleaning = statusKey === "cleaning"
 
   const style: React.CSSProperties = {
     position: "absolute",
@@ -151,28 +179,45 @@ const DraggableTable = memo(function DraggableTable({
     zIndex: isDragging ? 1000 : 1,
   }
 
+  const handleClick = () => {
+    if (isEditMode) return
+    onLogOpen(table)
+  }
+
   return (
     <div ref={setNodeRef} style={style} {...(isEditMode ? { ...attributes, ...listeners } : {})}
-      className={isEditMode ? "cursor-move" : "cursor-pointer"}>
-      <div className={`flex flex-col overflow-hidden rounded-xl border transition-colors ${config.bg} ${config.border}`}
+      className={`relative ${isEditMode ? "cursor-move" : "cursor-pointer"}`}>
+
+      {/* 청소 필요 경고 배지 — 별표 (overflow-hidden 바깥에 배치) */}
+      {isCleaning && (
+        <div className="absolute -left-3 -top-3 z-20 animate-bounce pointer-events-none drop-shadow-[0_2px_6px_rgba(239,68,68,0.7)]">
+          <MessageCircleWarning className="h-7 w-7 text-red-500" fill="#fef2f2" />
+        </div>
+      )}
+
+      <div className={`relative flex flex-col overflow-hidden rounded-xl border transition-colors ${config.bg} ${config.border} ${isCleaning ? "ring-2 ring-red-400 ring-offset-1" : ""}`}
         style={{ height: TOTAL_HEIGHT }}>
+
         {/* 테이블 정보 */}
         <div className="relative flex flex-1 flex-col items-center justify-center px-3 text-center"
-          onClick={() => !isEditMode && onStatusChange(table.id)}>
+          onClick={handleClick}>
           {isEditMode && (
             <div className="absolute left-1/2 top-1 -translate-x-1/2">
               <GripVertical className="h-4 w-4 text-gray-400" />
             </div>
           )}
           <div className="absolute right-2 top-2">
-            <span className={`inline-block h-2 w-2 rounded-full ${config.dot}`} />
+            <span className={`inline-block h-2 w-2 rounded-full ${config.dot} ${isCleaning ? "animate-pulse" : ""}`} />
           </div>
           <div className="text-sm font-semibold text-gray-900">{table.name}</div>
-          <div className="mt-0.5 text-xs text-gray-500">{config.label}</div>
-          {table.awayTime && (
+          <div className={`mt-0.5 text-xs font-medium ${isCleaning ? "text-red-600" : "text-gray-500"}`}>{config.label}</div>
+          {table.awayTime && !isCleaning && (
             <div className={`mt-0.5 text-xs font-medium ${isWarning ? "text-red-500" : "text-yellow-600"}`}>
               {table.awayTime}
             </div>
+          )}
+          {!isEditMode && (
+            <div className="mt-1 text-[10px] text-gray-400">로그 보기</div>
           )}
         </div>
         <div className={`h-px w-full border-t ${config.border}`} />
@@ -245,6 +290,11 @@ export default function SeatManagementPage() {
   const [isEditMode, setIsEditMode] = useState(false)
   const [activeId, setActiveId] = useState<number | null>(null)
   const canvasRef = useRef<HTMLDivElement>(null)
+
+  // 로그 다이얼로그
+  const [logDialogTable, setLogDialogTable] = useState<TableData | null>(null)
+  const [aiLogs, setAiLogs] = useState<AiLog[]>([])
+  const [isLogLoading, setIsLogLoading] = useState(false)
 
   // 층 관리 상태 — 초기값을 localStorage에서 복구
   const FLOORS_STORAGE_KEY = "cafemonitor-floors-v3"
@@ -588,6 +638,21 @@ export default function SeatManagementPage() {
     }))
   }, [isEditMode, setTables])
 
+  // ── 로그 다이얼로그 열기 ──────────────────────────────────────────────────
+  const handleLogOpen = useCallback(async (table: TableData) => {
+    setLogDialogTable(table)
+    setAiLogs([])
+    setIsLogLoading(true)
+    try {
+      const res = await fetch(`http://34.64.58.23:8080/api/ai/sender?seatId=${table.id}`)
+      if (res.ok) {
+        const data: AiLog[] = await res.json()
+        setAiLogs(data)
+      }
+    } catch { /* 로그 없음 */ }
+    finally { setIsLogLoading(false) }
+  }, [])
+
   const resetAllToAvailable = () =>
     setTables(prev => prev.map(t => ({ ...t, status: "available" as TableStatus, awayTime: undefined })))
 
@@ -736,6 +801,7 @@ export default function SeatManagementPage() {
                           table={table}
                           onStatusChange={cycleTableStatus}
                           onPersonCountChange={handlePersonCountChange}
+                          onLogOpen={handleLogOpen}
                           isEditMode={isEditMode}
                         />
                       ))}
@@ -757,6 +823,11 @@ export default function SeatManagementPage() {
                   className="border-gray-300 bg-white text-gray-600 hover:bg-gray-100"
                   onClick={resetAllToAvailable}>
                   <RotateCcw className="mr-2 h-4 w-4" />상태 초기화
+                </Button>
+                <Button variant="outline"
+                  className="border-red-300 bg-red-50 text-red-600 hover:bg-red-100"
+                  onClick={() => setTables(prev => prev.map((t, i) => i === 0 ? { ...t, status: "cleaning" as TableStatus } : t))}>
+                  <AlertTriangle className="mr-2 h-4 w-4" />이벤트 테스트
                 </Button>
                 {isEditMode && (
                   <Button variant="outline"
@@ -809,6 +880,91 @@ export default function SeatManagementPage() {
           </div>
         </div>
       </main>
+
+      {/* ── 테이블 로그 다이얼로그 ──────────────────────────────────────────── */}
+      <Dialog open={!!logDialogTable} onOpenChange={(open) => { if (!open) setLogDialogTable(null) }}>
+        <DialogContent className="max-w-lg bg-white">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-gray-900">
+              {logDialogTable?.status === "cleaning" && (
+                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-red-100">
+                  <AlertTriangle className="h-4 w-4 text-red-500" />
+                </span>
+              )}
+              {logDialogTable?.name} — 이벤트 로그
+            </DialogTitle>
+          </DialogHeader>
+
+          {/* 현재 상태 뱃지 */}
+          {logDialogTable && (() => {
+            const sk = (logDialogTable.status?.toLowerCase() || "available") as TableStatus
+            const cfg = statusConfig[sk] || statusConfig.available
+            return (
+              <div className={`flex items-center gap-2 rounded-lg border px-3 py-2 ${cfg.bg} ${cfg.border}`}>
+                <span className={`h-2.5 w-2.5 rounded-full ${cfg.dot}`} />
+                <span className="text-sm font-medium text-gray-700">현재 상태: {cfg.label}</span>
+                {logDialogTable.awayTime && (
+                  <span className="ml-auto text-xs text-gray-500">{logDialogTable.awayTime}</span>
+                )}
+              </div>
+            )
+          })()}
+
+          {/* 로그 타임라인 */}
+          <ScrollArea className="h-[360px] rounded-lg border border-gray-200 bg-gray-50 p-3">
+            {isLogLoading ? (
+              <div className="flex h-full items-center justify-center">
+                <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
+              </div>
+            ) : aiLogs.length === 0 ? (
+              <div className="flex h-full flex-col items-center justify-center gap-2 text-gray-400">
+                <AlertTriangle className="h-8 w-8 opacity-30" />
+                <p className="text-sm">기록된 이벤트가 없습니다.</p>
+              </div>
+            ) : (
+              <div className="space-y-1">
+                {aiLogs.map((log, idx) => {
+                  const style = aiLogStatusStyle[log.status] ?? { color: "bg-gray-400", label: log.status }
+                  const isAlert = log.status === "cleaning"
+                  const date = new Date(log.createdAt)
+                  const timeStr = date.toLocaleString("ko-KR", {
+                    month: "2-digit", day: "2-digit",
+                    hour: "2-digit", minute: "2-digit", second: "2-digit",
+                  })
+                  return (
+                    <div key={log.id ?? idx}
+                      className={`flex items-start gap-3 rounded-lg px-3 py-2 ${isAlert ? "bg-red-50 border border-red-200" : "bg-white border border-gray-100"}`}>
+                      <div className="mt-1 flex flex-col items-center">
+                        <span className={`h-2.5 w-2.5 rounded-full ${style.color} ${isAlert ? "animate-pulse" : ""}`} />
+                        {idx < aiLogs.length - 1 && <div className="mt-1 h-full w-px bg-gray-200" style={{ minHeight: 16 }} />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className={`text-xs font-semibold ${isAlert ? "text-red-600" : "text-gray-700"}`}>
+                            {style.label}
+                          </span>
+                          {log.rawAiStatus && log.rawAiStatus !== log.status && (
+                            <span className="rounded bg-gray-100 px-1 py-0.5 text-[10px] text-gray-500">
+                              {log.rawAiStatus}
+                            </span>
+                          )}
+                          {log.awayTime && (
+                            <span className="text-xs text-yellow-600">{log.awayTime}</span>
+                          )}
+                        </div>
+                        <div className="mt-0.5 text-[11px] text-gray-400">{timeStr}</div>
+                        {log.statusLabel && (
+                          <div className="mt-0.5 text-xs text-gray-500">{log.statusLabel}</div>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
