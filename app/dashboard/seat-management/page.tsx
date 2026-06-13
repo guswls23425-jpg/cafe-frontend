@@ -418,10 +418,11 @@ export default function SeatManagementPage() {
     if (!cafeName) return
 
     const fetchAllFloors = async () => {
-      setIsLoading(true)
+      // localStorage에 이미 데이터가 있으면 스피너 없이 백그라운드 갱신
+      const storageData = loadFloorsFromStorage()
+      if (!storageData) setIsLoading(true)
       try {
         // localStorage의 층 구조를 기준으로 유지하면서, 서버의 테이블 데이터만 병합
-        const storageData = loadFloorsFromStorage()
         const localFloors: FloorData[] = storageData?.floors ?? [createFloor(1, 1)]
 
         // 신규 floors API 시도
@@ -555,14 +556,28 @@ export default function SeatManagementPage() {
       }
 
       // 위치는 유지하고 상태/인원만 덮어씀
-      setFloors(prev => prev.map(f => ({
-        ...f,
-        tables: f.tables.map(t => {
-          const live = statusMap.get(t.name)
-          if (!live) return t
-          return { ...t, status: live.status, awayTime: live.awayTime, personCount: live.personCount }
-        }),
-      })))
+      // 값이 바뀐 경우에만 새 객체 생성 → memo 유효, 불필요한 리렌더 방지
+      setFloors(prev => {
+        let anyFloorChanged = false
+        const next = prev.map(f => {
+          let tableChanged = false
+          const tables = f.tables.map(t => {
+            const live = statusMap.get(t.name)
+            if (!live) return t
+            if (
+              live.status === t.status &&
+              live.awayTime === t.awayTime &&
+              live.personCount === t.personCount
+            ) return t  // 같으면 기존 참조 유지
+            tableChanged = true
+            return { ...t, status: live.status, awayTime: live.awayTime, personCount: live.personCount }
+          })
+          if (!tableChanged) return f
+          anyFloorChanged = true
+          return { ...f, tables }
+        })
+        return anyFloorChanged ? next : prev  // 아무것도 안 바뀌면 prev 그대로
+      })
     } catch { /* 폴링 오류 무시 */ }
   }, [cafeName])
 
@@ -573,12 +588,16 @@ export default function SeatManagementPage() {
   }, [cafeName, isLoading, pollSeatStatuses])
 
   // ── [4] 저장 (신규 floors API → 폴백: 구 save API) ──────────────────────
+  // status/awayTime/personCount 는 AI 전용 — 레이아웃(name, posX, posY)만 전송
+  const toLayoutOnly = (tables: TableData[]) =>
+    tables.map(({ id, name, posX, posY }) => ({ id, name, posX, posY, status: "available", personCount: 0 }))
+
   const handleSaveChanges = async () => {
     try {
       const body = floors.map(f => ({
         floorNumber: f.id,
         label: f.label,
-        seats: f.tables,
+        seats: toLayoutOnly(f.tables),
       }))
 
       // 신규 floors/save 시도
@@ -592,7 +611,7 @@ export default function SeatManagementPage() {
       // 폴백: 전 층 좌석을 floorNumber 포함 flat list로 저장
       if (!saved) {
         const allSeats = floors.flatMap(f =>
-          f.tables.map(t => ({ ...t, floorNumber: f.id }))
+          toLayoutOnly(f.tables).map(t => ({ ...t, floorNumber: f.id }))
         )
         const fallbackRes = await fetch(
           `http://34.64.58.23:8080/api/seats/save?cafeName=${encodeURIComponent(cafeName)}`,
@@ -626,10 +645,11 @@ export default function SeatManagementPage() {
   // ── 층 구조를 서버에 동기화하는 헬퍼 ──────────────────────────────────────
   const syncFloorsToServer = async (updatedFloors: FloorData[]) => {
     if (!cafeName) return
+    // 레이아웃(구조) 변경만 전송 — AI가 관리하는 status/awayTime/personCount 제외
     const body = updatedFloors.map(f => ({
       floorNumber: f.id,
       label: f.label,
-      seats: f.tables,
+      seats: toLayoutOnly(f.tables),
     }))
     try {
       const res = await fetch(
@@ -637,9 +657,8 @@ export default function SeatManagementPage() {
         { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }
       )
       if (!res.ok) {
-        // floors/save 실패 시 전 층 flat list로 폴백
         const allSeats = updatedFloors.flatMap(f =>
-          f.tables.map(t => ({ ...t, floorNumber: f.id }))
+          toLayoutOnly(f.tables).map(t => ({ ...t, floorNumber: f.id }))
         )
         await fetch(
           `http://34.64.58.23:8080/api/seats/save?cafeName=${encodeURIComponent(cafeName)}`,
@@ -732,10 +751,24 @@ export default function SeatManagementPage() {
 
   // ── 인원 / 상태 변경 ──────────────────────────────────────────────────────
   const handlePersonCountChange = useCallback((tableId: number, delta: number) => {
-    setTables(prev => prev.map(t =>
-      t.id === tableId ? { ...t, personCount: Math.max(0, Math.min(4, (t.personCount ?? 0) + delta)) } : t
-    ))
-  }, [setTables])
+    // 1) 로컬 상태 즉시 반영
+    let updatedTable: TableData | undefined
+    setTables(prev => prev.map(t => {
+      if (t.id !== tableId) return t
+      updatedTable = { ...t, personCount: Math.max(0, Math.min(4, (t.personCount ?? 0) + delta)) }
+      return updatedTable
+    }))
+    // 2) PATCH API로 해당 좌석만 직접 업데이트 — 전체 save 없이 AI 데이터 보호
+    if (!cafeName || !updatedTable) return
+    const floor = floorsRef.current.find(f => f.tables.some(t => t.id === tableId))
+    if (!floor || !updatedTable) return
+    const target = updatedTable
+    fetch(`http://34.64.58.23:8080/api/seats/status?cafeName=${encodeURIComponent(cafeName)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: target.name, floorNumber: floor.id, personCount: target.personCount }),
+    }).catch(() => { /* 네트워크 오류 무시 — 다음 폴링에서 서버 값으로 자연 동기화 */ })
+  }, [cafeName, setTables])
 
   const cycleTableStatus = useCallback((tableId: number) => {
     if (isEditMode) return
