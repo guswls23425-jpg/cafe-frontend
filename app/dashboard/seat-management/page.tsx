@@ -17,7 +17,7 @@ import {
 import { CSS } from "@dnd-kit/utilities"
 import {
   Save, RotateCcw, GripVertical, Lock, Unlock, Loader2,
-  ChevronUp, ChevronDown, Minus, Plus, X, Building2, AlertTriangle, MessageCircleWarning,
+  Minus, Plus, X, Building2, AlertTriangle, MessageCircleWarning,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -163,14 +163,12 @@ const aiLogStatusStyle: Record<string, { color: string; label: string }> = {
 // ─── DraggableTable ───────────────────────────────────────────────────────────
 interface DraggableTableProps {
   table: TableData
-  onStatusChange: (id: number) => void
-  onPersonCountChange: (id: number, delta: number) => void
   onLogOpen: (table: TableData) => void
   isEditMode: boolean
 }
 
 const DraggableTable = memo(function DraggableTable({
-  table, onStatusChange, onPersonCountChange, onLogOpen, isEditMode,
+  table, onLogOpen, isEditMode,
 }: DraggableTableProps) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: table.id,
@@ -237,26 +235,12 @@ const DraggableTable = memo(function DraggableTable({
         </div>
         <div className={`h-px w-full border-t ${config.border}`} />
         {/* 인원 아이콘 */}
-        <div className="flex items-center justify-between bg-white/60 px-2"
-          style={{ height: PERSON_ROW_HEIGHT }} onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-center bg-white/60 px-2"
+          style={{ height: PERSON_ROW_HEIGHT }}>
           <div className="flex items-center gap-0.5">
             {Array.from({ length: 4 }).map((_, i) => (
               <PersonIcon key={i} size={ICON_SIZE} filled={i < table.personCount} />
             ))}
-          </div>
-          <div className="flex flex-col">
-            <button onPointerDown={(e) => e.stopPropagation()}
-              onClick={(e) => { e.stopPropagation(); onPersonCountChange(table.id, 1) }}
-              disabled={table.personCount === 4}
-              className="flex h-4 w-4 items-center justify-center rounded text-gray-400 hover:bg-gray-200 hover:text-gray-700 disabled:opacity-25">
-              <ChevronUp className="h-3 w-3" />
-            </button>
-            <button onPointerDown={(e) => e.stopPropagation()}
-              onClick={(e) => { e.stopPropagation(); onPersonCountChange(table.id, -1) }}
-              disabled={table.personCount === 0}
-              className="flex h-4 w-4 items-center justify-center rounded text-gray-400 hover:bg-gray-200 hover:text-gray-700 disabled:opacity-25">
-              <ChevronDown className="h-3 w-3" />
-            </button>
           </div>
         </div>
       </div>
@@ -282,15 +266,11 @@ const TableOverlay = memo(function TableOverlay({ table }: { table: TableData })
         <div className="mt-0.5 text-xs text-gray-500">{config.label}</div>
       </div>
       <div className={`h-px w-full border-t ${config.border}`} />
-      <div className="flex items-center justify-between bg-white/60 px-2" style={{ height: PERSON_ROW_HEIGHT }}>
+      <div className="flex items-center justify-center bg-white/60 px-2" style={{ height: PERSON_ROW_HEIGHT }}>
         <div className="flex items-center gap-0.5">
           {Array.from({ length: 4 }).map((_, i) => (
             <PersonIcon key={i} size={ICON_SIZE} filled={i < table.personCount} />
           ))}
-        </div>
-        <div className="flex flex-col opacity-40">
-          <ChevronUp className="h-3 w-3 text-gray-400" />
-          <ChevronDown className="h-3 w-3 text-gray-400" />
         </div>
       </div>
     </div>
@@ -749,36 +729,6 @@ export default function SeatManagementPage() {
     }
   }
 
-  // ── 인원 / 상태 변경 ──────────────────────────────────────────────────────
-  const handlePersonCountChange = useCallback((tableId: number, delta: number) => {
-    // 1) 로컬 상태 즉시 반영
-    let updatedTable: TableData | undefined
-    setTables(prev => prev.map(t => {
-      if (t.id !== tableId) return t
-      updatedTable = { ...t, personCount: Math.max(0, Math.min(4, (t.personCount ?? 0) + delta)) }
-      return updatedTable
-    }))
-    // 2) PATCH API로 해당 좌석만 직접 업데이트 — 전체 save 없이 AI 데이터 보호
-    if (!cafeName || !updatedTable) return
-    const floor = floorsRef.current.find(f => f.tables.some(t => t.id === tableId))
-    if (!floor || !updatedTable) return
-    const target = updatedTable
-    fetch(`http://34.64.58.23:8080/api/seats/status?cafeName=${encodeURIComponent(cafeName)}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: target.name, floorNumber: floor.id, personCount: target.personCount }),
-    }).catch(() => { /* 네트워크 오류 무시 — 다음 폴링에서 서버 값으로 자연 동기화 */ })
-  }, [cafeName, setTables])
-
-  const cycleTableStatus = useCallback((tableId: number) => {
-    if (isEditMode) return
-    setTables(prev => prev.map(table => {
-      if (table.id !== tableId) return table
-      const order: TableStatus[] = ["available", "active", "away"]
-      const next = order[(order.indexOf(table.status) + 1) % order.length]
-      return { ...table, status: next, awayTime: next === "away" ? "00:00" : undefined }
-    }))
-  }, [isEditMode, setTables])
 
   // ── 로그 다이얼로그 열기 ──────────────────────────────────────────────────
   const handleLogOpen = useCallback(async (table: TableData) => {
@@ -794,9 +744,6 @@ export default function SeatManagementPage() {
     } catch { /* 로그 없음 */ }
     finally { setIsLogLoading(false) }
   }, [])
-
-  const resetAllToAvailable = () =>
-    setTables(prev => prev.map(t => ({ ...t, status: "available" as TableStatus, awayTime: undefined })))
 
   const resetPositions = () =>
     setTables(prev => prev.map((t, i) => ({
@@ -953,8 +900,6 @@ export default function SeatManagementPage() {
                         <DraggableTable
                           key={table.id}
                           table={table}
-                          onStatusChange={cycleTableStatus}
-                          onPersonCountChange={handlePersonCountChange}
                           onLogOpen={handleLogOpen}
                           isEditMode={isEditMode}
                         />
@@ -971,17 +916,7 @@ export default function SeatManagementPage() {
               <div className="flex gap-3 pt-4">
                 <Button className="bg-emerald-600 text-white hover:bg-emerald-700" onClick={handleSaveChanges}>
                   <Save className="mr-2 h-4 w-4" />
-                  변경사항 저장 ({currentFloor?.label})
-                </Button>
-                <Button variant="outline"
-                  className="border-gray-300 bg-white text-gray-600 hover:bg-gray-100"
-                  onClick={resetAllToAvailable}>
-                  <RotateCcw className="mr-2 h-4 w-4" />상태 초기화
-                </Button>
-                <Button variant="outline"
-                  className="border-red-300 bg-red-50 text-red-600 hover:bg-red-100"
-                  onClick={() => setTables(prev => prev.map((t, i) => i === 0 ? { ...t, status: "cleaning" as TableStatus } : t))}>
-                  <AlertTriangle className="mr-2 h-4 w-4" />이벤트 테스트
+                  배치 저장 ({currentFloor?.label})
                 </Button>
                 {isEditMode && (
                   <Button variant="outline"
