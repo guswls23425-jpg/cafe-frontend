@@ -376,20 +376,15 @@ export default function SeatManagementPage() {
   // 현재 층 데이터
   const currentFloor = floors.find(f => f.id === activeFloorId) ?? floors[0]
   const tables = currentFloor?.tables ?? []
-  const tableCount = currentFloor?.tableCount ?? 0
+  const tableCount = tables.length  // tableCount는 항상 tables.length와 동일
 
   /** 현재 층의 tables를 업데이트하는 헬퍼 */
   const setTables = useCallback((updater: (prev: TableData[]) => TableData[]) => {
-    setFloors(prev => prev.map(f =>
-      f.id === activeFloorId ? { ...f, tables: updater(f.tables) } : f
-    ))
-  }, [activeFloorId])
-
-  /** 현재 층의 tableCount를 업데이트하는 헬퍼 */
-  const setTableCount = useCallback((count: number) => {
-    setFloors(prev => prev.map(f =>
-      f.id === activeFloorId ? { ...f, tableCount: count } : f
-    ))
+    setFloors(prev => prev.map(f => {
+      if (f.id !== activeFloorId) return f
+      const next = updater(f.tables)
+      return { ...f, tables: next, tableCount: next.length }
+    }))
   }, [activeFloorId])
 
   // ── [1] 로그인 정보 확인 ───────────────────────────────────────────────────
@@ -731,24 +726,38 @@ export default function SeatManagementPage() {
   }
 
   // ── 테이블 수 조절 ────────────────────────────────────────────────────────
+  // tableCount는 tables.length와 항상 동일하게 유지 — 이중 관리 제거
   const adjustTableCount = (delta: number) => {
-    const newCount = Math.max(1, Math.min(24, tableCount + delta))
-    setTableCount(newCount)
-    if (newCount > tables.length) {
-      const extra: TableData[] = Array.from({ length: newCount - tables.length }, (_, i) => {
-        const idx = tables.length + i
+    const current = tables.length
+    const newCount = Math.max(1, Math.min(24, current + delta))
+    if (newCount === current) return
+
+    if (newCount > current) {
+      // 기존 테이블 id 최댓값 이후로 신규 id 부여 (충돌 방지)
+      const allIds = floorsRef.current.flatMap(f => f.tables.map(t => t.id))
+      let nextId = allIds.length > 0 ? Math.max(...allIds) + 1 : 1
+      const extra: TableData[] = Array.from({ length: newCount - current }, (_, i) => {
+        const idx = current + i
         return {
-          id: idx + 1,
+          id: nextId++,
           name: `테이블 ${idx + 1}`,
-          status: "available",
+          status: "available" as TableStatus,
           posX: (idx % 4) * (TABLE_WIDTH + 20) + 20,
           posY: Math.floor(idx / 4) * (TOTAL_HEIGHT + 20) + 20,
           personCount: 0,
         }
       })
-      setTables(prev => [...prev, ...extra])
+      setFloors(prev => prev.map(f =>
+        f.id === activeFloorId
+          ? { ...f, tables: [...f.tables, ...extra], tableCount: newCount }
+          : f
+      ))
     } else {
-      setTables(prev => prev.slice(0, newCount))
+      setFloors(prev => prev.map(f =>
+        f.id === activeFloorId
+          ? { ...f, tables: f.tables.slice(0, newCount), tableCount: newCount }
+          : f
+      ))
     }
   }
 
