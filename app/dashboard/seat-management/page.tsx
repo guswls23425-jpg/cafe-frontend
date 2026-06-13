@@ -315,11 +315,21 @@ export default function SeatManagementPage() {
   const [activeFloorId, setActiveFloorId] = useState<number>(1)
   const [nextFloorId, setNextFloorId] = useState(2)
 
-  // 마운트 시 localStorage에서 floors 복구 (hydration 이후에만 실행)
+  // 마운트 시 localStorage에서 floors 복구 — 레이아웃(위치/이름)만 사용, AI 상태는 제거
   useEffect(() => {
     const cached = loadFloorsFromStorage()
     if (cached) {
-      setFloors(cached.floors)
+      // status/awayTime/personCount는 AI 전용 — localStorage 값은 stale이므로 초기화
+      const layoutOnly = cached.floors.map(f => ({
+        ...f,
+        tables: f.tables.map(t => ({
+          ...t,
+          status: "available" as TableStatus,
+          awayTime: undefined,
+          personCount: 0,
+        })),
+      }))
+      setFloors(layoutOnly)
       setActiveFloorId(cached.activeFloorId)
       setNextFloorId(cached.nextFloorId)
     }
@@ -327,10 +337,23 @@ export default function SeatManagementPage() {
   }, [])
 
   // floors가 변경될 때마다 localStorage에 저장 + ref 동기화
+  // localStorage에는 레이아웃(posX/posY/name/층 구조)만 저장 — AI 상태는 제외
   useEffect(() => {
     floorsRef.current = floors
     try {
-      localStorage.setItem(FLOORS_STORAGE_KEY, JSON.stringify({ floors, activeFloorId, nextFloorId }))
+      const layoutToSave = {
+        activeFloorId,
+        nextFloorId,
+        floors: floors.map(f => ({
+          ...f,
+          tables: f.tables.map(({ id, name, posX, posY }) => ({
+            id, name, posX, posY,
+            status: "available" as TableStatus,
+            personCount: 0,
+          })),
+        })),
+      }
+      localStorage.setItem(FLOORS_STORAGE_KEY, JSON.stringify(layoutToSave))
     } catch {}
   }, [floors, activeFloorId, nextFloorId])
 
