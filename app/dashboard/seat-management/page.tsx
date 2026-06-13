@@ -512,30 +512,11 @@ export default function SeatManagementPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cafeName])
 
-  // ── [3] DB 상태 실시간 폴링 (5초 간격) ────────────────────────────────────
-  const pollSeatStatuses = useCallback(async () => {
-    if (!cafeName) return
-    try {
-      const res = await fetch(
-        `http://34.64.58.23:8080/api/seats/floors?cafeName=${encodeURIComponent(cafeName)}`
-      )
-      if (!res.ok) return
-      const data: Array<{ floorNumber: number; label: string; seats: TableData[] }> = await res.json()
-      if (!data || data.length === 0) return
-
-      // name 기준으로 서버 상태 맵 구성
-      const statusMap = new Map<string, { status: TableStatus; awayTime?: string; personCount: number }>()
-      for (const floor of data) {
-        for (const seat of floor.seats ?? []) {
-          statusMap.set(seat.name, {
-            status: seat.status as TableStatus,
-            awayTime: seat.awayTime,
-            personCount: seat.personCount ?? 0,
-          })
-        }
-      }
-
-      // 상태 변화 감지 — lastLoggedStatusRef 기준으로 중복 제거
+  // ── [3] SSE 실시간 수신 (AI 업데이트 즉시 반영) ──────────────────────────
+  // AI → 백엔드 DB 저장 → SSE push → 여기서 수신
+  const applyStatusMap = useCallback(
+    (statusMap: Map<string, { status: TableStatus; awayTime?: string; personCount: number }>) => {
+      // 이벤트 로그 기록 (상태가 바뀐 것만)
       const now = new Date().toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })
       const changes: EventItem[] = []
       for (const f of floorsRef.current) {
@@ -549,11 +530,8 @@ export default function SeatManagementPage() {
           }
         }
       }
-      if (changes.length > 0) {
-        setEventLog(prev => [...changes, ...prev].slice(0, 30))
-      }
+      if (changes.length > 0) setEventLog(prev => [...changes, ...prev].slice(0, 30))
 
-      // 위치는 유지하고 상태/인원만 덮어씀
       // 값이 바뀐 경우에만 새 객체 생성 → memo 유효, 불필요한 리렌더 방지
       setFloors(prev => {
         let anyFloorChanged = false
@@ -562,11 +540,7 @@ export default function SeatManagementPage() {
           const tables = f.tables.map(t => {
             const live = statusMap.get(t.name)
             if (!live) return t
-            if (
-              live.status === t.status &&
-              live.awayTime === t.awayTime &&
-              live.personCount === t.personCount
-            ) return t  // 같으면 기존 참조 유지
+            if (live.status === t.status && live.awayTime === t.awayTime && live.personCount === t.personCount) return t
             tableChanged = true
             return { ...t, status: live.status, awayTime: live.awayTime, personCount: live.personCount }
           })
@@ -574,16 +548,49 @@ export default function SeatManagementPage() {
           anyFloorChanged = true
           return { ...f, tables }
         })
-        return anyFloorChanged ? next : prev  // 아무것도 안 바뀌면 prev 그대로
+        return anyFloorChanged ? next : prev
       })
-    } catch { /* 폴링 오류 무시 */ }
-  }, [cafeName])
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  )
 
   useEffect(() => {
     if (!cafeName || isLoading) return
-    const id = setInterval(pollSeatStatuses, 5000)
-    return () => clearInterval(id)
-  }, [cafeName, isLoading, pollSeatStatuses])
+
+    const es = new EventSource(
+      `http://34.64.58.23:8080/api/seats/stream`
+    )
+
+    es.addEventListener("seat-update", (e: MessageEvent) => {
+      try {
+        const event: {
+          cafeName: string
+          floorId: number
+          seats: Array<{ name: string; status: string; awayTime: string; personCount: number }>
+        } = JSON.parse(e.data)
+
+        // 다른 카페 데이터는 무시
+        if (event.cafeName !== cafeName) return
+
+        const statusMap = new Map<string, { status: TableStatus; awayTime?: string; personCount: number }>()
+        for (const seat of event.seats) {
+          statusMap.set(seat.name, {
+            status: seat.status as TableStatus,
+            awayTime: seat.awayTime || undefined,
+            personCount: seat.personCount ?? 0,
+          })
+        }
+        applyStatusMap(statusMap)
+      } catch { /* 파싱 오류 무시 */ }
+    })
+
+    es.onerror = () => {
+      // 연결 끊김 시 EventSource가 자동 재연결 시도
+    }
+
+    return () => es.close()
+  }, [cafeName, isLoading, applyStatusMap])
 
   // ── [4] 저장 (신규 floors API → 폴백: 구 save API) ──────────────────────
   // status/awayTime/personCount 는 AI 전용 — 레이아웃(name, posX, posY)만 전송
