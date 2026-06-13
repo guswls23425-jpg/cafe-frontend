@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef, memo, useCallback, useEffect } from "react"
+import { useState, useRef, memo, useCallback, useEffect, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import {
   DndContext,
@@ -37,21 +37,35 @@ import {
 } from "@/components/ui/dialog"
 
 // ─── 이벤트 로그 / 차트 데이터 ────────────────────────────────────────────────
-const mockEvents = [
-  { time: "14:23", message: "테이블 3", status: "away" as const },
-  { time: "14:20", message: "테이블 9 제한 시간 초과", status: "warning" as const },
-  { time: "14:15", message: "테이블 5 자동 해제됨", status: "released" as const },
-  { time: "14:10", message: "테이블 7", status: "away" as const },
-  { time: "14:02", message: "테이블 12", status: "occupied" as const },
-  { time: "13:55", message: "테이블 2", status: "occupied" as const },
-  { time: "13:48", message: "테이블 8", status: "away" as const },
-  { time: "13:42", message: "테이블 8 자동 해제됨", status: "released" as const },
-  { time: "13:35", message: "테이블 4", status: "occupied" as const },
-  { time: "13:28", message: "테이블 11", status: "occupied" as const },
-]
-const logStatusColors  = { occupied:"bg-emerald-500", away:"bg-yellow-500", released:"bg-gray-400", warning:"bg-red-500" }
-const logStatusLabels  = { occupied:"[사용중]", away:"[자리비움]", released:"[해제됨]", warning:"[경고]" }
-const logStatusTextColors = { occupied:"text-emerald-600", away:"text-yellow-600", released:"text-gray-500", warning:"text-red-500" }
+type EventStatus = TableStatus | "released"
+
+interface EventItem {
+  time: string
+  message: string
+  status: EventStatus
+}
+
+const logStatusColors: Record<EventStatus, string> = {
+  active:    "bg-emerald-500",
+  away:      "bg-yellow-500",
+  available: "bg-gray-400",
+  cleaning:  "bg-red-500",
+  released:  "bg-gray-300",
+}
+const logStatusLabels: Record<EventStatus, string> = {
+  active:    "[사용중]",
+  away:      "[자리비움]",
+  available: "[빈자리]",
+  cleaning:  "[청소필요]",
+  released:  "[해제됨]",
+}
+const logStatusTextColors: Record<EventStatus, string> = {
+  active:    "text-emerald-600",
+  away:      "text-yellow-600",
+  available: "text-gray-400",
+  cleaning:  "text-red-500",
+  released:  "text-gray-400",
+}
 
 const hourlyData = [
   { hour:"9시",  occupancy:45 }, { hour:"10시", occupancy:62 }, { hour:"11시", occupancy:78 },
@@ -164,7 +178,8 @@ const DraggableTable = memo(function DraggableTable({
   })
   const statusKey = (table.status?.toLowerCase() || "available") as TableStatus
   const config = statusConfig[statusKey] || statusConfig.available
-  const isWarning = statusKey === "away" && table.awayTime && parseInt(table.awayTime.split(":")[0]) >= 5
+  const awaySeconds = table.awayTime ? parseInt(table.awayTime) : 0
+  const isWarning = statusKey === "away" && awaySeconds >= 300  // 5분 이상 경고
   const isCleaning = statusKey === "cleaning"
 
   const style: React.CSSProperties = {
@@ -213,7 +228,7 @@ const DraggableTable = memo(function DraggableTable({
           <div className={`mt-0.5 text-xs font-medium ${isCleaning ? "text-red-600" : "text-gray-500"}`}>{config.label}</div>
           {table.awayTime && !isCleaning && (
             <div className={`mt-0.5 text-xs font-medium ${isWarning ? "text-red-500" : "text-yellow-600"}`}>
-              {table.awayTime}
+              {awaySeconds >= 60 ? `${Math.floor(awaySeconds / 60)}분 ${awaySeconds % 60}초` : `${awaySeconds}초`}
             </div>
           )}
           {!isEditMode && (
@@ -296,7 +311,16 @@ export default function SeatManagementPage() {
   const [aiLogs, setAiLogs] = useState<AiLog[]>([])
   const [isLogLoading, setIsLogLoading] = useState(false)
 
-  // 층 관리 상태 — 초기값을 localStorage에서 복구
+  // 실시간 이벤트 로그
+  const EVENT_LOG_KEY = "cafemonitor-event-log"
+  const [eventLog, setEventLog] = useState<EventItem[]>([])
+
+  // 폴링용 floors ref (stale closure 방지)
+  const floorsRef = useRef<FloorData[]>([])
+  // 테이블별 마지막 로그 기록 상태 — 같은 상태는 중복 기록 안 함
+  const lastLoggedStatusRef = useRef<Map<string, TableStatus>>(new Map())
+
+  // 층 관리 상태 — 서버/클라이언트 모두 동일한 기본값으로 시작 후 useEffect에서 복구
   const FLOORS_STORAGE_KEY = "cafemonitor-floors-v3"
 
   const loadFloorsFromStorage = (): { floors: FloorData[]; activeFloorId: number; nextFloorId: number } | null => {
@@ -307,17 +331,43 @@ export default function SeatManagementPage() {
     } catch { return null }
   }
 
-  const cached = loadFloorsFromStorage()
-  const [floors, setFloors] = useState<FloorData[]>(cached?.floors ?? [createFloor(1, 1)])
-  const [activeFloorId, setActiveFloorId] = useState<number>(cached?.activeFloorId ?? 1)
-  const [nextFloorId, setNextFloorId] = useState(cached?.nextFloorId ?? 2)
+  const [floors, setFloors] = useState<FloorData[]>([createFloor(1, 1)])
+  const [activeFloorId, setActiveFloorId] = useState<number>(1)
+  const [nextFloorId, setNextFloorId] = useState(2)
 
-  // floors가 변경될 때마다 localStorage에 저장
+  // 마운트 시 localStorage에서 floors 복구 (hydration 이후에만 실행)
   useEffect(() => {
+    const cached = loadFloorsFromStorage()
+    if (cached) {
+      setFloors(cached.floors)
+      setActiveFloorId(cached.activeFloorId)
+      setNextFloorId(cached.nextFloorId)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // floors가 변경될 때마다 localStorage에 저장 + ref 동기화
+  useEffect(() => {
+    floorsRef.current = floors
     try {
       localStorage.setItem(FLOORS_STORAGE_KEY, JSON.stringify({ floors, activeFloorId, nextFloorId }))
     } catch {}
   }, [floors, activeFloorId, nextFloorId])
+
+  // 마운트 시 eventLog localStorage 복구 (hydration 이후에만 실행)
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(EVENT_LOG_KEY)
+      if (raw) setEventLog(JSON.parse(raw))
+    } catch {}
+  }, [])
+
+  // eventLog가 변경될 때마다 localStorage에 저장
+  useEffect(() => {
+    try {
+      localStorage.setItem(EVENT_LOG_KEY, JSON.stringify(eventLog))
+    } catch {}
+  }, [eventLog])
 
 
   // 현재 층 데이터
@@ -463,7 +513,66 @@ export default function SeatManagementPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cafeName])
 
-  // ── [3] 저장 (신규 floors API → 폴백: 구 save API) ──────────────────────
+  // ── [3] DB 상태 실시간 폴링 (5초 간격) ────────────────────────────────────
+  const pollSeatStatuses = useCallback(async () => {
+    if (!cafeName) return
+    try {
+      const res = await fetch(
+        `http://34.64.58.23:8080/api/seats/floors?cafeName=${encodeURIComponent(cafeName)}`
+      )
+      if (!res.ok) return
+      const data: Array<{ floorNumber: number; label: string; seats: TableData[] }> = await res.json()
+      if (!data || data.length === 0) return
+
+      // name 기준으로 서버 상태 맵 구성
+      const statusMap = new Map<string, { status: TableStatus; awayTime?: string; personCount: number }>()
+      for (const floor of data) {
+        for (const seat of floor.seats ?? []) {
+          statusMap.set(seat.name, {
+            status: seat.status as TableStatus,
+            awayTime: seat.awayTime,
+            personCount: seat.personCount ?? 0,
+          })
+        }
+      }
+
+      // 상태 변화 감지 — lastLoggedStatusRef 기준으로 중복 제거
+      const now = new Date().toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })
+      const changes: EventItem[] = []
+      for (const f of floorsRef.current) {
+        for (const t of f.tables) {
+          const live = statusMap.get(t.name)
+          if (!live) continue
+          const lastLogged = lastLoggedStatusRef.current.get(t.name)
+          if (live.status !== lastLogged) {
+            changes.push({ time: now, message: `${t.name} (${f.label})`, status: live.status })
+            lastLoggedStatusRef.current.set(t.name, live.status)
+          }
+        }
+      }
+      if (changes.length > 0) {
+        setEventLog(prev => [...changes, ...prev].slice(0, 30))
+      }
+
+      // 위치는 유지하고 상태/인원만 덮어씀
+      setFloors(prev => prev.map(f => ({
+        ...f,
+        tables: f.tables.map(t => {
+          const live = statusMap.get(t.name)
+          if (!live) return t
+          return { ...t, status: live.status, awayTime: live.awayTime, personCount: live.personCount }
+        }),
+      })))
+    } catch { /* 폴링 오류 무시 */ }
+  }, [cafeName])
+
+  useEffect(() => {
+    if (!cafeName || isLoading) return
+    const id = setInterval(pollSeatStatuses, 5000)
+    return () => clearInterval(id)
+  }, [cafeName, isLoading, pollSeatStatuses])
+
+  // ── [4] 저장 (신규 floors API → 폴백: 구 save API) ──────────────────────
   const handleSaveChanges = async () => {
     try {
       const body = floors.map(f => ({
@@ -665,13 +774,25 @@ export default function SeatManagementPage() {
 
   const activeTable = tables.find(t => t.id === activeId)
 
+  // ── 전체 통계 (모든 층 합산) ──────────────────────────────────────────────
+  const allTables = useMemo(() => floors.flatMap(f => f.tables), [floors])
+  const totalSeats    = allTables.length
+  const totalActive   = allTables.filter(t => t.status === "active").length
+  const totalAway     = allTables.filter(t => t.status === "away").length
+  const totalWarning  = allTables.filter(t => t.status === "cleaning").length
+
   // ── 렌더 ──────────────────────────────────────────────────────────────────
   return (
     <div className="flex min-h-screen bg-gray-50">
       <SidebarNav />
 
       <main className="ml-64 flex-1 text-gray-900">
-        <HeaderStats />
+        <HeaderStats
+          totalSeats={totalSeats}
+          activeCount={totalActive}
+          awayCount={totalAway}
+          warningCount={totalWarning}
+        />
 
         <div className="space-y-6 p-6">
           <div className="grid gap-6 lg:grid-cols-3">
@@ -842,22 +963,36 @@ export default function SeatManagementPage() {
             {/* ── 오른쪽: 로그 + 차트 ───────────────────────────────────── */}
             <div className="flex flex-col gap-4">
               <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-                <h3 className="mb-3 text-sm font-medium text-gray-900">실시간 좌석 활동 로그</h3>
+                <div className="mb-3 flex items-center justify-between">
+                  <h3 className="text-sm font-medium text-gray-900">실시간 좌석 활동 로그</h3>
+                  {eventLog.length > 0 && (
+                    <button
+                      onClick={() => setEventLog([])}
+                      className="text-xs text-gray-400 hover:text-gray-600"
+                    >
+                      초기화
+                    </button>
+                  )}
+                </div>
                 <ScrollArea className="h-[280px] rounded-lg border border-gray-200 bg-gray-50 p-3">
                   <div className="space-y-3">
-                    {mockEvents.map((event, index) => (
-                      <div key={index} className="flex items-start gap-3">
-                        <div className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${logStatusColors[event.status]}`} />
-                        <div className="flex-1 text-sm">
-                          <span className="text-gray-400">{event.time}</span>
-                          <span className="mx-2 text-gray-400">-</span>
-                          <span className="text-gray-700">{event.message}</span>
-                          <span className={`ml-1 font-medium ${logStatusTextColors[event.status]}`}>
-                            {logStatusLabels[event.status]}
-                          </span>
+                    {eventLog.length === 0 ? (
+                      <p className="py-8 text-center text-xs text-gray-400">AI 상태 변화가 감지되면 여기에 표시됩니다.</p>
+                    ) : (
+                      eventLog.map((event, index) => (
+                        <div key={index} className="flex items-start gap-3">
+                          <div className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${logStatusColors[event.status]}`} />
+                          <div className="flex-1 text-sm">
+                            <span className="text-gray-400">{event.time}</span>
+                            <span className="mx-2 text-gray-400">-</span>
+                            <span className="text-gray-700">{event.message}</span>
+                            <span className={`ml-1 font-medium ${logStatusTextColors[event.status]}`}>
+                              {logStatusLabels[event.status]}
+                            </span>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      ))
+                    )}
                   </div>
                 </ScrollArea>
               </div>

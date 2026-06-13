@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Coffee, ArrowLeft, Store, ArrowRight, Loader2, Building2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -15,7 +15,7 @@ const PERSON_ROW_HEIGHT = ICON_SIZE + 16
 const TOTAL_HEIGHT      = TABLE_HEIGHT + PERSON_ROW_HEIGHT
 
 // ─── 타입 ─────────────────────────────────────────────────────────────────────
-type TableStatus = "active" | "away" | "available"
+type TableStatus = "active" | "away" | "available" | "cleaning"
 
 interface TableData {
   id: number
@@ -51,6 +51,7 @@ const statusConfig = {
   active:    { bg: "bg-emerald-50", border: "border-emerald-300", label: "사용중",   dot: "bg-emerald-500" },
   away:      { bg: "bg-yellow-50",  border: "border-yellow-300",  label: "자리비움", dot: "bg-yellow-500"  },
   available: { bg: "bg-gray-50",    border: "border-gray-200",    label: "이용가능", dot: "bg-gray-400"    },
+  cleaning:  { bg: "bg-red-50",     border: "border-red-300",     label: "청소중",   dot: "bg-red-500"     },
 }
 
 // ─── 사람 아이콘 (읽기 전용) ──────────────────────────────────────────────────
@@ -68,7 +69,8 @@ function PersonIcon({ size, filled }: { size: number; filled: boolean }) {
 function TableCard({ table }: { table: TableData }) {
   const statusKey = (table.status?.toLowerCase() || "available") as TableStatus
   const config = statusConfig[statusKey] || statusConfig.available
-  const isWarning = statusKey === "away" && table.awayTime && parseInt(table.awayTime.split(":")[0]) >= 5
+  const awaySeconds = table.awayTime ? parseInt(table.awayTime) : 0
+  const isWarning = statusKey === "away" && awaySeconds >= 300  // 5분 이상 경고
 
   return (
     <div
@@ -93,7 +95,7 @@ function TableCard({ table }: { table: TableData }) {
           <div className="mt-0.5 text-xs text-gray-500">{config.label}</div>
           {table.awayTime && (
             <div className={`mt-0.5 text-xs font-medium ${isWarning ? "text-red-500" : "text-yellow-600"}`}>
-              {table.awayTime}
+              {awaySeconds >= 60 ? `${Math.floor(awaySeconds / 60)}분 ${awaySeconds % 60}초` : `${awaySeconds}초`}
             </div>
           )}
         </div>
@@ -125,6 +127,8 @@ export default function GuestPage() {
   // 층 상태
   const [floors, setFloors] = useState<FloorData[]>([])
   const [activeFloorId, setActiveFloorId] = useState<number>(1)
+  const floorsRef = useRef<FloorData[]>([])
+  useEffect(() => { floorsRef.current = floors }, [floors])
 
   const currentFloor = floors.find(f => f.id === activeFloorId) ?? floors[0]
   const tables = currentFloor?.tables ?? []
@@ -132,6 +136,7 @@ export default function GuestPage() {
   const availableCount = tables.filter(t => t.status === "available").length
   const activeCount    = tables.filter(t => t.status === "active").length
   const awayCount      = tables.filter(t => t.status === "away").length
+  const cleaningCount  = tables.filter(t => t.status === "cleaning").length
 
   // ── 초기 로딩 ───────────────────────────────────────────────────────────
   useEffect(() => {
@@ -233,6 +238,47 @@ export default function GuestPage() {
     }
     fetchSeats()
   }, [])
+
+  // ── DB 상태 실시간 폴링 (5초 간격) ───────────────────────────────────────
+  useEffect(() => {
+    if (!cafeName || isLoading) return
+
+    const poll = async () => {
+      try {
+        const res = await fetch(
+          `http://34.64.58.23:8080/api/seats/floors?cafeName=${encodeURIComponent(cafeName)}`
+        )
+        if (!res.ok) return
+        const data: Array<{ floorNumber: number; label: string; seats: TableData[] }> = await res.json()
+        if (!data || data.length === 0) return
+
+        // name 기준으로 서버 상태 맵 구성
+        const statusMap = new Map<string, { status: TableStatus; awayTime?: string; personCount: number }>()
+        for (const floor of data) {
+          for (const seat of floor.seats ?? []) {
+            statusMap.set(seat.name, {
+              status: seat.status as TableStatus,
+              awayTime: seat.awayTime,
+              personCount: seat.personCount ?? 0,
+            })
+          }
+        }
+
+        // 위치는 유지, 상태/인원만 갱신
+        setFloors(prev => prev.map(f => ({
+          ...f,
+          tables: f.tables.map(t => {
+            const live = statusMap.get(t.name)
+            if (!live) return t
+            return { ...t, status: live.status, awayTime: live.awayTime, personCount: live.personCount }
+          }),
+        })))
+      } catch { /* 폴링 오류 무시 */ }
+    }
+
+    const id = setInterval(poll, 5000)
+    return () => clearInterval(id)
+  }, [cafeName, isLoading])
 
   // ── 카페명 검색 ──────────────────────────────────────────────────────────
   const handleSubmit = async (e: React.FormEvent) => {
@@ -385,7 +431,7 @@ export default function GuestPage() {
 
       <main className="mx-auto max-w-5xl px-4 py-8">
         {/* 통계 요약 (현재 층 기준) */}
-        <div className="mb-8 grid grid-cols-3 gap-4">
+        <div className={`mb-8 grid gap-4 ${cleaningCount > 0 ? "grid-cols-4" : "grid-cols-3"}`}>
           <div className="rounded-xl border border-emerald-300 bg-emerald-50 p-4 text-center">
             <div className="text-3xl font-bold text-emerald-500">{availableCount}</div>
             <div className="text-sm text-gray-500">이용가능</div>
@@ -398,6 +444,12 @@ export default function GuestPage() {
             <div className="text-3xl font-bold text-yellow-500">{awayCount}</div>
             <div className="text-sm text-gray-500">자리비움</div>
           </div>
+          {cleaningCount > 0 && (
+            <div className="rounded-xl border border-red-300 bg-red-50 p-4 text-center">
+              <div className="text-3xl font-bold text-red-500">{cleaningCount}</div>
+              <div className="text-sm text-gray-500">청소중</div>
+            </div>
+          )}
         </div>
 
         {/* 범례 */}

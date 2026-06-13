@@ -37,30 +37,39 @@ function StatCard({ title, value, icon, accent = "default" }: StatCardProps) {
   )
 }
 
-export function HeaderStats() {
+interface HeaderStatsProps {
+  totalSeats?: number
+  activeCount?: number
+  awayCount?: number
+  warningCount?: number
+}
+
+export function HeaderStats({ totalSeats = 0, activeCount = 0, awayCount = 0, warningCount = 0 }: HeaderStatsProps) {
+  const occupancyRate = totalSeats > 0 ? Math.round((activeCount / totalSeats) * 100) : 0
+
   return (
     <header className="border-b border-gray-200 bg-white px-6 py-4">
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         <StatCard
           title="전체 좌석"
-          value="16"
+          value={String(totalSeats)}
           icon={<Armchair className="h-5 w-5" />}
         />
         <StatCard
           title="현재 점유율"
-          value="75% (12/16)"
+          value={`${occupancyRate}% (${activeCount}/${totalSeats})`}
           icon={<Users className="h-5 w-5" />}
           accent="green"
         />
         <StatCard
           title="자리비움"
-          value="3"
+          value={String(awayCount)}
           icon={<Clock className="h-5 w-5" />}
           accent="yellow"
         />
         <StatCard
-          title="노쇼 경고"
-          value="1"
+          title="청소·경고"
+          value={String(warningCount)}
           icon={<AlertTriangle className="h-5 w-5" />}
           accent="red"
         />
