@@ -89,6 +89,8 @@ interface AiLog {
 // ─── 테이블 / 층 타입 ─────────────────────────────────────────────────────────
 type TableStatus = "active" | "away" | "available" | "cleaning"
 
+type TableShape = "rect" | "rounded" | "circle"
+
 interface TableData {
   id: number
   name: string
@@ -97,6 +99,11 @@ interface TableData {
   posX: number
   posY: number
   personCount: number
+  shape?: TableShape
+  tableWidth?: number
+  tableHeight?: number
+  capacity?: number   // 최대 수용 인원 (의자 수), 1~8
+  rotation?: number   // 회전 각도 (도), 0~359
 }
 
 interface FloorData {
@@ -107,12 +114,88 @@ interface FloorData {
 }
 
 // ─── 상수 ─────────────────────────────────────────────────────────────────────
-const GRID_SIZE         = 20
-const TABLE_WIDTH       = 120
-const TABLE_HEIGHT      = 100
-const ICON_SIZE         = Math.round(TABLE_WIDTH / 6)   // 20px
-const PERSON_ROW_HEIGHT = ICON_SIZE + 16
-const TOTAL_HEIGHT      = TABLE_HEIGHT + PERSON_ROW_HEIGHT
+const GRID_SIZE    = 20
+const TABLE_WIDTH  = 120
+const TABLE_HEIGHT = 100
+const MIN_TABLE_W  = 80
+const MIN_TABLE_H  = 70
+const MAX_TABLE_W  = 300
+const MAX_TABLE_H  = 240
+const CHAIR_DEPTH  = 14   // 테이블 엣지~의자 중심 거리 (px)
+const CHAIR_W      = 18   // 의자 너비 (테이블 엣지 방향)
+const CHAIR_H      = 8    // 의자 깊이 (수직 방향)
+
+// 상태별 SVG 색상 (Tailwind 클래스 대신 hex)
+const statusSvgColors: Record<TableStatus, {
+  bg: string; border: string; dot: string; chairFilled: string; chairEmpty: string; text: string
+}> = {
+  active:    { bg:"#ecfdf5", border:"#6ee7b7", dot:"#10b981", chairFilled:"#10b981", chairEmpty:"#d1fae5", text:"#065f46" },
+  away:      { bg:"#fefce8", border:"#fde68a", dot:"#f59e0b", chairFilled:"#f59e0b", chairEmpty:"#fef3c7", text:"#92400e" },
+  available: { bg:"#f9fafb", border:"#e5e7eb", dot:"#9ca3af", chairFilled:"#9ca3af", chairEmpty:"#f3f4f6", text:"#6b7280" },
+  cleaning:  { bg:"#fff1f2", border:"#fca5a5", dot:"#ef4444", chairFilled:"#ef4444", chairEmpty:"#fee2e2", text:"#991b1b" },
+}
+
+function getTableDims(table: TableData) {
+  const w      = table.tableWidth  ?? TABLE_WIDTH
+  const h      = table.tableHeight ?? TABLE_HEIGHT
+  const outerW = w + CHAIR_DEPTH * 2
+  const outerH = h + CHAIR_DEPTH * 2
+  return { w, h, outerW, outerH }
+}
+
+// ─── 의자 배분 (capacity → [top, bottom, left, right]) ───────────────────────
+function distributeChairs(n: number): [number, number, number, number] {
+  const map: Record<number, [number,number,number,number]> = {
+    0:[0,0,0,0], 1:[1,0,0,0], 2:[1,1,0,0], 3:[1,1,0,1],
+    4:[1,1,1,1], 5:[2,2,0,1], 6:[2,2,1,1], 7:[2,2,1,2], 8:[2,2,2,2],
+  }
+  return map[Math.min(8, Math.max(0, n))] ?? [2,2,2,2]
+}
+
+type ChairPos = { x: number; y: number; rotate: number; filled: boolean }
+
+function getChairPositions(
+  shape: TableShape | undefined,
+  tw: number, th: number,
+  capacity: number, personCount: number
+): ChairPos[] {
+  const chairs: ChairPos[] = []
+  const cd = CHAIR_DEPTH
+  const tx = cd   // 테이블 왼쪽 상단 x (SVG 내부 오프셋)
+  const ty = cd   // 테이블 왼쪽 상단 y
+
+  if (shape === "circle") {
+    const cx = tx + tw / 2
+    const cy = ty + th / 2
+    const r  = Math.min(tw, th) / 2 + cd * 0.7
+    for (let i = 0; i < capacity; i++) {
+      const angle = (i / capacity) * Math.PI * 2 - Math.PI / 2
+      chairs.push({
+        x: cx + Math.cos(angle) * r,
+        y: cy + Math.sin(angle) * r,
+        rotate: (angle * 180 / Math.PI) + 90,
+        filled: i < personCount,
+      })
+    }
+  } else {
+    const [top, bottom, left, right] = distributeChairs(capacity)
+    const addChairs = (
+      count: number,
+      xFn: (i: number) => number,
+      yFn: (i: number) => number,
+      rot: number
+    ) => {
+      for (let i = 0; i < count; i++) {
+        chairs.push({ x: xFn(i), y: yFn(i), rotate: rot, filled: chairs.length < personCount })
+      }
+    }
+    addChairs(top,    i => tx + (tw / (top    + 1)) * (i + 1), _ => ty - cd * 0.6,      0)
+    addChairs(bottom, i => tx + (tw / (bottom + 1)) * (i + 1), _ => ty + th + cd * 0.6, 180)
+    addChairs(left,   _ => tx - cd * 0.6, i => ty + (th / (left  + 1)) * (i + 1),       270)
+    addChairs(right,  _ => tx + tw + cd * 0.6, i => ty + (th / (right + 1)) * (i + 1),  90)
+  }
+  return chairs
+}
 
 // ─── 유틸 ─────────────────────────────────────────────────────────────────────
 function createInitialTables(count = 16): TableData[] {
@@ -124,8 +207,13 @@ function createInitialTables(count = 16): TableData[] {
       name: `테이블 ${i + 1}`,
       status: "available",
       posX: col * (TABLE_WIDTH + 20) + 20,
-      posY: row * (TOTAL_HEIGHT + 20) + 20,
+      posY: row * ((TABLE_HEIGHT + CHAIR_DEPTH * 2) + 20) + 20,
       personCount: 0,
+      shape: "rect",
+      tableWidth: TABLE_WIDTH,
+      tableHeight: TABLE_HEIGHT,
+      capacity: 4,
+      rotation: 0,
     }
   })
 }
@@ -134,13 +222,20 @@ function createFloor(id: number, index: number): FloorData {
   return { id, label: `${index}층`, tables: [], tableCount: 0 }
 }
 
-// ─── 아이콘 ───────────────────────────────────────────────────────────────────
-function PersonIcon({ size, filled }: { size: number; filled: boolean }) {
+// ─── SVG 의자 ─────────────────────────────────────────────────────────────────
+function SvgChair({ x, y, rotate, filled, filledColor, emptyColor }: {
+  x: number; y: number; rotate: number; filled: boolean
+  filledColor: string; emptyColor: string
+}) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" className={filled ? "text-gray-800" : "text-gray-300"}>
-      <circle cx="12" cy="7" r="4.5" fill="currentColor" />
-      <path d="M3 22c0-5 4-9 9-9s9 4 9 9" fill="currentColor" clipPath="inset(0 0 2px 0)" />
-    </svg>
+    <rect
+      x={x - CHAIR_W / 2} y={y - CHAIR_H / 2}
+      width={CHAIR_W} height={CHAIR_H} rx={3}
+      fill={filled ? filledColor : emptyColor}
+      stroke={filled ? filledColor : "#d1d5db"}
+      strokeWidth={0.5}
+      transform={`rotate(${rotate},${x},${y})`}
+    />
   )
 }
 
@@ -160,90 +255,235 @@ const aiLogStatusStyle: Record<string, { color: string; label: string }> = {
   cleaning:  { color: "bg-red-500",    label: "청소필요" },
 }
 
+// ─── 모양별 border-radius ─────────────────────────────────────────────────────
+function shapeRadius(shape: TableShape | undefined, w: number, h: number): string {
+  switch (shape) {
+    case "circle":  return "50%"
+    case "rounded": return `${Math.min(w, h) * 0.35}px`
+    default:        return "12px"
+  }
+}
+
 // ─── DraggableTable ───────────────────────────────────────────────────────────
 interface DraggableTableProps {
   table: TableData
   onLogOpen: (table: TableData) => void
   isEditMode: boolean
+  onResize: (id: number, w: number, h: number) => void
+  onShapeChange: (id: number, shape: TableShape) => void
+  onCapacityChange: (id: number, delta: number) => void
+  onRotationChange: (id: number, deg: number) => void
 }
 
+const SHAPES: { key: TableShape; label: string; icon: string }[] = [
+  { key: "rect",    label: "사각형",      icon: "⬜" },
+  { key: "rounded", label: "둥근 사각형", icon: "▢"  },
+  { key: "circle",  label: "원형",        icon: "⭕" },
+]
+
 const DraggableTable = memo(function DraggableTable({
-  table, onLogOpen, isEditMode,
+  table, onLogOpen, isEditMode, onResize, onShapeChange, onCapacityChange, onRotationChange,
 }: DraggableTableProps) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: table.id,
     disabled: !isEditMode,
   })
-  const statusKey = (table.status?.toLowerCase() || "available") as TableStatus
-  const config = statusConfig[statusKey] || statusConfig.available
-  const awaySeconds = table.awayTime ? parseInt(table.awayTime) : 0
-  const isWarning = statusKey === "away" && awaySeconds >= 300  // 5분 이상 경고
-  const isCleaning = statusKey === "cleaning"
 
-  const style: React.CSSProperties = {
+  const { w, h, outerW, outerH } = getTableDims(table)
+  const shape      = table.shape    ?? "rect"
+  const capacity   = table.capacity ?? 4
+  const rotation   = table.rotation ?? 0
+  const statusKey  = (table.status?.toLowerCase() || "available") as TableStatus
+  const colors     = statusSvgColors[statusKey] ?? statusSvgColors.available
+  const config     = statusConfig[statusKey]    ?? statusConfig.available
+  const awaySeconds = table.awayTime ? parseInt(table.awayTime) : 0
+  const isWarning   = statusKey === "away" && awaySeconds >= 300
+  const isCleaning  = statusKey === "cleaning"
+  const awayStr     = awaySeconds >= 60
+    ? `${Math.floor(awaySeconds / 60)}분 ${awaySeconds % 60}초`
+    : `${awaySeconds}초`
+
+  // SVG 좌표
+  const cd = CHAIR_DEPTH
+  const tx = cd                  // 테이블 좌상단 x
+  const ty = cd                  // 테이블 좌상단 y
+  const cx = tx + w / 2          // 테이블 중심 x
+  const cy = ty + h / 2          // 테이블 중심 y
+  const radius = shape === "circle" ? "50%" : shape === "rounded" ? `${Math.min(w,h)*0.3}px` : "10px"
+
+  const chairs = getChairPositions(shape, w, h, capacity, table.personCount)
+
+  // ── 리사이즈 핸들 ──────────────────────────────────────────────────────────
+  const resizeRef = useRef<{ startX: number; startY: number; startW: number; startH: number } | null>(null)
+  const handleResizeMouseDown = (e: React.MouseEvent) => {
+    e.stopPropagation(); e.preventDefault()
+    resizeRef.current = { startX: e.clientX, startY: e.clientY, startW: w, startH: h }
+    const onMove = (me: MouseEvent) => {
+      if (!resizeRef.current) return
+      const { startX, startY, startW, startH } = resizeRef.current
+      const newW = Math.round(Math.max(MIN_TABLE_W, Math.min(MAX_TABLE_W, startW + me.clientX - startX)) / GRID_SIZE) * GRID_SIZE
+      const newH = Math.round(Math.max(MIN_TABLE_H, Math.min(MAX_TABLE_H, startH + me.clientY - startY)) / GRID_SIZE) * GRID_SIZE
+      onResize(table.id, newW, shape === "circle" ? newW : newH)
+    }
+    const onUp = () => {
+      resizeRef.current = null
+      window.removeEventListener("mousemove", onMove)
+      window.removeEventListener("mouseup", onUp)
+    }
+    window.addEventListener("mousemove", onMove)
+    window.addEventListener("mouseup", onUp)
+  }
+
+  const outerStyle: React.CSSProperties = {
     position: "absolute",
     left: table.posX ?? 0,
-    top: table.posY ?? 0,
-    width: TABLE_WIDTH,
-    height: TOTAL_HEIGHT,
+    top:  table.posY ?? 0,
+    width: outerW,
+    height: outerH,
     transform: CSS.Transform.toString(transform),
     opacity: isDragging ? 0 : 1,
     willChange: isEditMode ? "transform" : "auto",
     zIndex: isDragging ? 1000 : 1,
   }
 
-  const handleClick = () => {
-    if (isEditMode) return
-    onLogOpen(table)
-  }
-
   return (
-    <div ref={setNodeRef} style={style} {...(isEditMode ? { ...attributes, ...listeners } : {})}
-      className={`relative ${isEditMode ? "cursor-move" : "cursor-pointer"}`}>
-
-      {/* 청소 필요 경고 배지 — 별표 (overflow-hidden 바깥에 배치) */}
+    <div
+      ref={setNodeRef} style={outerStyle}
+      {...(isEditMode ? { ...attributes, ...listeners } : {})}
+      className={`relative ${isEditMode ? "cursor-move" : "cursor-pointer"}`}
+    >
+      {/* 청소 경고 배지 */}
       {isCleaning && (
-        <div className="absolute -left-3 -top-3 z-20 animate-bounce pointer-events-none drop-shadow-[0_2px_6px_rgba(239,68,68,0.7)]">
-          <MessageCircleWarning className="h-7 w-7 text-red-500" fill="#fef2f2" />
+        <div className="absolute -left-2 -top-2 z-20 animate-bounce pointer-events-none drop-shadow-[0_2px_6px_rgba(239,68,68,0.7)]">
+          <MessageCircleWarning className="h-6 w-6 text-red-500" fill="#fff1f2" />
         </div>
       )}
 
-      <div className={`relative flex flex-col overflow-hidden rounded-xl border transition-colors ${config.bg} ${config.border} ${isCleaning ? "ring-2 ring-red-400 ring-offset-1" : ""}`}
-        style={{ height: TOTAL_HEIGHT }}>
+      {/* ── 탑뷰 SVG ─────────────────────────────────────────────────────── */}
+      <svg
+        width={outerW} height={outerH}
+        style={{ display: "block", transform: `rotate(${rotation}deg)`, transformOrigin: "center center", overflow: "visible" }}
+        onClick={() => { if (!isEditMode) onLogOpen(table) }}
+      >
+        {/* 의자 */}
+        {chairs.map((c, i) => (
+          <SvgChair key={i}
+            x={c.x} y={c.y} rotate={c.rotate} filled={c.filled}
+            filledColor={colors.chairFilled} emptyColor={colors.chairEmpty}
+          />
+        ))}
 
-        {/* 테이블 정보 */}
-        <div className="relative flex flex-1 flex-col items-center justify-center px-3 text-center"
-          onClick={handleClick}>
-          {isEditMode && (
-            <div className="absolute left-1/2 top-1 -translate-x-1/2">
-              <GripVertical className="h-4 w-4 text-gray-400" />
-            </div>
-          )}
-          <div className="absolute right-2 top-2">
-            <span className={`inline-block h-2 w-2 rounded-full ${config.dot} ${isCleaning ? "animate-pulse" : ""}`} />
-          </div>
-          <div className="text-sm font-semibold text-gray-900">{table.name}</div>
-          <div className={`mt-0.5 text-xs font-medium ${isCleaning ? "text-red-600" : "text-gray-500"}`}>{config.label}</div>
-          {table.awayTime && !isCleaning && (
-            <div className={`mt-0.5 text-xs font-medium ${isWarning ? "text-red-500" : "text-yellow-600"}`}>
-              {awaySeconds >= 60 ? `${Math.floor(awaySeconds / 60)}분 ${awaySeconds % 60}초` : `${awaySeconds}초`}
-            </div>
-          )}
-          {!isEditMode && (
-            <div className="mt-1 text-[10px] text-gray-400">로그 보기</div>
-          )}
-        </div>
-        <div className={`h-px w-full border-t ${config.border}`} />
-        {/* 인원 아이콘 */}
-        <div className="flex items-center justify-center bg-white/60 px-2"
-          style={{ height: PERSON_ROW_HEIGHT }}>
-          <div className="flex items-center gap-0.5">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <PersonIcon key={i} size={ICON_SIZE} filled={i < table.personCount} />
+        {/* 테이블 바디 */}
+        {shape === "circle" ? (
+          <ellipse
+            cx={cx} cy={cy} rx={w/2} ry={h/2}
+            fill={colors.bg} stroke={isCleaning ? "#ef4444" : colors.border}
+            strokeWidth={isCleaning ? 2 : 1.5}
+          />
+        ) : (
+          <rect
+            x={tx} y={ty} width={w} height={h}
+            rx={shape === "rounded" ? Math.min(w,h)*0.3 : 10}
+            fill={colors.bg} stroke={isCleaning ? "#ef4444" : colors.border}
+            strokeWidth={isCleaning ? 2 : 1.5}
+          />
+        )}
+
+        {/* 상태 점 */}
+        <circle
+          cx={cx + w/2 - 10} cy={cy - h/2 + 10}
+          r={4} fill={colors.dot}
+          className={isCleaning ? "animate-pulse" : ""}
+        />
+
+        {/* 편집 모드 그립 아이콘 */}
+        {isEditMode && (
+          <text x={cx} y={cy - h/2 + 12} textAnchor="middle" fontSize={9} fill="#9ca3af">⠿</text>
+        )}
+
+        {/* 테이블 이름 */}
+        <text x={cx} y={cy - 3} textAnchor="middle" fontSize={11} fontWeight={600} fill="#111827"
+          style={{ userSelect: "none" }}>
+          {table.name}
+        </text>
+
+        {/* 상태 라벨 */}
+        <text x={cx} y={cy + 11} textAnchor="middle" fontSize={9} fill={colors.text}
+          style={{ userSelect: "none" }}>
+          {config.label}
+        </text>
+
+        {/* 자리비움 시간 */}
+        {table.awayTime && statusKey === "away" && (
+          <text x={cx} y={cy + 23} textAnchor="middle" fontSize={8}
+            fill={isWarning ? "#ef4444" : "#f59e0b"}
+            style={{ userSelect: "none" }}>
+            {awayStr}
+          </text>
+        )}
+
+        {/* 로그 보기 안내 */}
+        {!isEditMode && (
+          <text x={cx} y={ty + h - 5} textAnchor="middle" fontSize={8} fill="#9ca3af"
+            style={{ userSelect: "none" }}>
+            로그 보기
+          </text>
+        )}
+      </svg>
+
+      {/* ── 편집 모드 전용 UI (SVG 바깥, rotation 미적용) ─────────────────── */}
+      {isEditMode && (
+        <>
+          {/* 통합 툴바 (테이블 위) */}
+          <div
+            className="absolute -top-9 left-0 flex items-center gap-1 rounded-md border border-gray-200 bg-white px-1.5 py-0.5 shadow-sm text-xs"
+            onPointerDown={e => e.stopPropagation()}
+            style={{ whiteSpace: "nowrap" }}
+          >
+            {/* 모양 선택 */}
+            {SHAPES.map(s => (
+              <button key={s.key} type="button" title={s.label}
+                onClick={e => { e.stopPropagation(); onShapeChange(table.id, s.key) }}
+                className={`rounded px-1 py-0.5 transition-colors ${
+                  shape === s.key ? "bg-emerald-500 text-white" : "text-gray-500 hover:bg-gray-100"
+                }`}
+              >{s.icon}</button>
             ))}
+
+            <span className="mx-0.5 text-gray-200">|</span>
+
+            {/* capacity 조절 */}
+            <button type="button" onClick={e => { e.stopPropagation(); onCapacityChange(table.id, -1) }}
+              className="rounded px-1 text-gray-500 hover:bg-gray-100">−</button>
+            <span className="text-gray-600">{capacity}인</span>
+            <button type="button" onClick={e => { e.stopPropagation(); onCapacityChange(table.id, +1) }}
+              className="rounded px-1 text-gray-500 hover:bg-gray-100">+</button>
+
+            <span className="mx-0.5 text-gray-200">|</span>
+
+            {/* rotation 조절 (45도씩) */}
+            <button type="button" title="반시계 45°"
+              onClick={e => { e.stopPropagation(); onRotationChange(table.id, (rotation - 45 + 360) % 360) }}
+              className="rounded px-1 text-gray-500 hover:bg-gray-100">↺</button>
+            <span className="text-gray-600">{rotation}°</span>
+            <button type="button" title="시계 45°"
+              onClick={e => { e.stopPropagation(); onRotationChange(table.id, (rotation + 45) % 360) }}
+              className="rounded px-1 text-gray-500 hover:bg-gray-100">↻</button>
           </div>
-        </div>
-      </div>
+
+          {/* 리사이즈 핸들 (우하단) */}
+          <div
+            className="absolute bottom-0 right-0 h-5 w-5 cursor-se-resize flex items-end justify-end"
+            onMouseDown={handleResizeMouseDown}
+            onPointerDown={e => e.stopPropagation()}
+            style={{ zIndex: 10 }}
+          >
+            <svg width="12" height="12" viewBox="0 0 12 12" className="text-gray-400 mb-0.5 mr-0.5">
+              <path d="M11 1L1 11M11 6L6 11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+            </svg>
+          </div>
+        </>
+      )}
     </div>
   )
 })
@@ -251,28 +491,33 @@ const DraggableTable = memo(function DraggableTable({
 // ─── TableOverlay (드래그 중 고스트) ──────────────────────────────────────────
 const TableOverlay = memo(function TableOverlay({ table }: { table: TableData }) {
   const statusKey = (table.status?.toLowerCase() || "available") as TableStatus
-  const config = statusConfig[statusKey] || statusConfig.available
+  const colors    = statusSvgColors[statusKey] ?? statusSvgColors.available
+  const { w, h, outerW, outerH } = getTableDims(table)
+  const shape    = table.shape    ?? "rect"
+  const capacity = table.capacity ?? 4
+  const rotation = table.rotation ?? 0
+  const cd = CHAIR_DEPTH
+  const cx = cd + w / 2
+  const cy = cd + h / 2
+  const chairs = getChairPositions(shape, w, h, capacity, table.personCount)
   return (
-    <div style={{ width: TABLE_WIDTH, height: TOTAL_HEIGHT, willChange: "transform" }}
-      className={`flex flex-col overflow-hidden rounded-xl border shadow-2xl ${config.bg} ${config.border}`}>
-      <div className="relative flex flex-1 flex-col items-center justify-center px-3 text-center">
-        <div className="absolute left-1/2 top-1 -translate-x-1/2">
-          <GripVertical className="h-4 w-4 text-gray-400" />
-        </div>
-        <div className="absolute right-2 top-2">
-          <span className={`inline-block h-2 w-2 rounded-full ${config.dot}`} />
-        </div>
-        <div className="text-sm font-semibold text-gray-900">{table.name}</div>
-        <div className="mt-0.5 text-xs text-gray-500">{config.label}</div>
-      </div>
-      <div className={`h-px w-full border-t ${config.border}`} />
-      <div className="flex items-center justify-center bg-white/60 px-2" style={{ height: PERSON_ROW_HEIGHT }}>
-        <div className="flex items-center gap-0.5">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <PersonIcon key={i} size={ICON_SIZE} filled={i < table.personCount} />
-          ))}
-        </div>
-      </div>
+    <div style={{ width: outerW, height: outerH, willChange: "transform", opacity: 0.85 }}>
+      <svg width={outerW} height={outerH}
+        style={{ display: "block", transform: `rotate(${rotation}deg)`, transformOrigin: "center center", overflow: "visible" }}>
+        {chairs.map((c, i) => (
+          <SvgChair key={i} x={c.x} y={c.y} rotate={c.rotate} filled={c.filled}
+            filledColor={colors.chairFilled} emptyColor={colors.chairEmpty} />
+        ))}
+        {shape === "circle" ? (
+          <ellipse cx={cx} cy={cy} rx={w/2} ry={h/2} fill={colors.bg} stroke={colors.border} strokeWidth={1.5} />
+        ) : (
+          <rect x={cd} y={cd} width={w} height={h}
+            rx={shape === "rounded" ? Math.min(w,h)*0.3 : 10}
+            fill={colors.bg} stroke={colors.border} strokeWidth={1.5} />
+        )}
+        <text x={cx} y={cy + 4} textAnchor="middle" fontSize={11} fontWeight={600} fill="#111827"
+          style={{ userSelect:"none" }}>{table.name}</text>
+      </svg>
     </div>
   )
 })
@@ -596,7 +841,15 @@ export default function SeatManagementPage() {
   // ── [4] 저장 (신규 floors API → 폴백: 구 save API) ──────────────────────
   // status/awayTime/personCount 는 AI 전용 — 레이아웃(name, posX, posY)만 전송
   const toLayoutOnly = (tables: TableData[]) =>
-    tables.map(({ id, name, posX, posY }) => ({ id, name, posX, posY, status: "available", personCount: 0 }))
+    tables.map(({ id, name, posX, posY, shape, tableWidth, tableHeight, capacity, rotation }) => ({
+      id, name, posX, posY,
+      status: "available", personCount: 0,
+      shape:       shape       ?? "rect",
+      tableWidth:  tableWidth  ?? TABLE_WIDTH,
+      tableHeight: tableHeight ?? TABLE_HEIGHT,
+      capacity:    capacity    ?? 4,
+      rotation:    rotation    ?? 0,
+    }))
 
   const handleSaveChanges = async () => {
     try {
@@ -722,8 +975,9 @@ export default function SeatManagementPage() {
     setTables(prev => prev.map(table => {
       if (table.id !== active.id) return table
       const canvas = canvasRef.current
-      const maxX = canvas ? canvas.scrollWidth  - TABLE_WIDTH  : 800
-      const maxY = canvas ? canvas.scrollHeight - TOTAL_HEIGHT : 600
+      const { outerW, outerH } = getTableDims(table)
+      const maxX = canvas ? canvas.scrollWidth  - outerW : 800
+      const maxY = canvas ? canvas.scrollHeight - outerH : 600
       return {
         ...table,
         posX: snapToGrid(Math.max(0, Math.min(maxX, (table.posX ?? 0) + delta.x))),
@@ -751,8 +1005,13 @@ export default function SeatManagementPage() {
           name: `테이블 ${idx + 1}`,
           status: "available" as TableStatus,
           posX: (idx % 4) * (TABLE_WIDTH + 20) + 20,
-          posY: Math.floor(idx / 4) * (TOTAL_HEIGHT + 20) + 20,
+          posY: Math.floor(idx / 4) * ((TABLE_HEIGHT + CHAIR_DEPTH * 2) + 20) + 20,
           personCount: 0,
+          shape: "rect" as TableShape,
+          tableWidth: TABLE_WIDTH,
+          tableHeight: TABLE_HEIGHT,
+          capacity: 4,
+          rotation: 0,
         }
       })
       setFloors(prev => prev.map(f =>
@@ -769,6 +1028,39 @@ export default function SeatManagementPage() {
     }
   }
 
+
+  // ── 테이블 리사이즈 ──────────────────────────────────────────────────────────
+  const handleResize = useCallback((id: number, newW: number, newH: number) => {
+    setTables(prev => prev.map(t =>
+      t.id === id ? { ...t, tableWidth: newW, tableHeight: newH } : t
+    ))
+  }, [setTables])
+
+  // ── 테이블 모양 변경 ──────────────────────────────────────────────────────────
+  const handleShapeChange = useCallback((id: number, shape: TableShape) => {
+    setTables(prev => prev.map(t => {
+      if (t.id !== id) return t
+      if (shape === "circle") {
+        const size = t.tableWidth ?? TABLE_WIDTH
+        return { ...t, shape, tableWidth: size, tableHeight: size }
+      }
+      return { ...t, shape }
+    }))
+  }, [setTables])
+
+  // ── capacity 조절 ─────────────────────────────────────────────────────────────
+  const handleCapacityChange = useCallback((id: number, delta: number) => {
+    setTables(prev => prev.map(t =>
+      t.id === id ? { ...t, capacity: Math.max(1, Math.min(8, (t.capacity ?? 4) + delta)) } : t
+    ))
+  }, [setTables])
+
+  // ── rotation 변경 ─────────────────────────────────────────────────────────────
+  const handleRotationChange = useCallback((id: number, deg: number) => {
+    setTables(prev => prev.map(t =>
+      t.id === id ? { ...t, rotation: deg } : t
+    ))
+  }, [setTables])
 
   // ── 로그 fetch (테이블·날짜 변경 시 공통 사용) ─────────────────────────────
   const fetchAiLogs = useCallback(async (seatId: number, date: string) => {
@@ -798,7 +1090,7 @@ export default function SeatManagementPage() {
     setTables(prev => prev.map((t, i) => ({
       ...t,
       posX: (i % 4) * (TABLE_WIDTH + 20) + 20,
-      posY: Math.floor(i / 4) * (TOTAL_HEIGHT + 20) + 20,
+      posY: Math.floor(i / 4) * ((TABLE_HEIGHT + CHAIR_DEPTH * 2) + 20) + 20,
     })))
 
   const activeTable = tables.find(t => t.id === activeId)
@@ -951,6 +1243,10 @@ export default function SeatManagementPage() {
                           table={table}
                           onLogOpen={handleLogOpen}
                           isEditMode={isEditMode}
+                          onResize={handleResize}
+                          onShapeChange={handleShapeChange}
+                          onCapacityChange={handleCapacityChange}
+                          onRotationChange={handleRotationChange}
                         />
                       ))}
                     </div>
