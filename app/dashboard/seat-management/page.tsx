@@ -102,8 +102,9 @@ interface TableData {
   shape?: TableShape
   tableWidth?: number
   tableHeight?: number
-  capacity?: number   // 최대 수용 인원 (의자 수), 1~8
-  rotation?: number   // 회전 각도 (도), 0~359
+  capacity?: number      // 최대 수용 인원 (의자 수), 1~8
+  rotation?: number      // 회전 각도 (도), 0~359
+  chairAngles?: number[] // 각 의자의 각도 (라디안, 0~2π), 길이 = capacity
 }
 
 interface FloorData {
@@ -143,13 +144,45 @@ function getTableDims(table: TableData) {
   return { w, h, outerW, outerH }
 }
 
-// ─── 의자 배분 (capacity → [top, bottom, left, right]) ───────────────────────
-function distributeChairs(n: number): [number, number, number, number] {
-  const map: Record<number, [number,number,number,number]> = {
-    0:[0,0,0,0], 1:[1,0,0,0], 2:[1,1,0,0], 3:[1,1,0,1],
-    4:[1,1,1,1], 5:[2,2,0,1], 6:[2,2,1,1], 7:[2,2,1,2], 8:[2,2,2,2],
+// ─── 의자 각도 유틸 ──────────────────────────────────────────────────────────
+
+// capacity 개수만큼 균등 각도 배열 생성 (위에서부터 시계방향)
+function initChairAngles(capacity: number): number[] {
+  return Array.from({ length: capacity }, (_, i) =>
+    ((i / capacity) * Math.PI * 2 - Math.PI / 2 + Math.PI * 2) % (Math.PI * 2)
+  )
+}
+
+// 각도 → SVG 상의 의자 중심 좌표 + 회전각 계산
+// cx/cy: SVG 내부 테이블 중심 좌표
+function angleToChairPos(
+  angle: number,
+  shape: TableShape | undefined,
+  tw: number, th: number,
+  cx: number, cy: number
+): { x: number; y: number; rotate: number } {
+  const hw  = tw / 2
+  const hh  = th / 2
+  const cos = Math.cos(angle)
+  const sin = Math.sin(angle)
+
+  let ex: number, ey: number  // 테이블 엣지 위의 점
+  if (shape === "circle") {
+    ex = cos * hw
+    ey = sin * hh
+  } else {
+    // 직사각형 엣지 교점 (방사 방향으로 스케일)
+    const sx = Math.abs(cos) < 1e-9 ? Infinity : hw / Math.abs(cos)
+    const sy = Math.abs(sin) < 1e-9 ? Infinity : hh / Math.abs(sin)
+    const s  = Math.min(sx, sy)
+    ex = cos * s
+    ey = sin * s
   }
-  return map[Math.min(8, Math.max(0, n))] ?? [2,2,2,2]
+  return {
+    x:      cx + ex + cos * CHAIR_DEPTH,
+    y:      cy + ey + sin * CHAIR_DEPTH,
+    rotate: (angle * 180 / Math.PI) + 90,
+  }
 }
 
 type ChairPos = { x: number; y: number; rotate: number; filled: boolean }
@@ -157,44 +190,14 @@ type ChairPos = { x: number; y: number; rotate: number; filled: boolean }
 function getChairPositions(
   shape: TableShape | undefined,
   tw: number, th: number,
-  capacity: number, personCount: number
+  cx: number, cy: number,
+  angles: number[],
+  personCount: number
 ): ChairPos[] {
-  const chairs: ChairPos[] = []
-  const cd = CHAIR_DEPTH
-  const tx = cd   // 테이블 왼쪽 상단 x (SVG 내부 오프셋)
-  const ty = cd   // 테이블 왼쪽 상단 y
-
-  if (shape === "circle") {
-    const cx = tx + tw / 2
-    const cy = ty + th / 2
-    const r  = Math.min(tw, th) / 2 + cd * 0.7
-    for (let i = 0; i < capacity; i++) {
-      const angle = (i / capacity) * Math.PI * 2 - Math.PI / 2
-      chairs.push({
-        x: cx + Math.cos(angle) * r,
-        y: cy + Math.sin(angle) * r,
-        rotate: (angle * 180 / Math.PI) + 90,
-        filled: i < personCount,
-      })
-    }
-  } else {
-    const [top, bottom, left, right] = distributeChairs(capacity)
-    const addChairs = (
-      count: number,
-      xFn: (i: number) => number,
-      yFn: (i: number) => number,
-      rot: number
-    ) => {
-      for (let i = 0; i < count; i++) {
-        chairs.push({ x: xFn(i), y: yFn(i), rotate: rot, filled: chairs.length < personCount })
-      }
-    }
-    addChairs(top,    i => tx + (tw / (top    + 1)) * (i + 1), _ => ty - cd * 0.6,      0)
-    addChairs(bottom, i => tx + (tw / (bottom + 1)) * (i + 1), _ => ty + th + cd * 0.6, 180)
-    addChairs(left,   _ => tx - cd * 0.6, i => ty + (th / (left  + 1)) * (i + 1),       270)
-    addChairs(right,  _ => tx + tw + cd * 0.6, i => ty + (th / (right + 1)) * (i + 1),  90)
-  }
-  return chairs
+  return angles.map((angle, i) => ({
+    ...angleToChairPos(angle, shape, tw, th, cx, cy),
+    filled: i < personCount,
+  }))
 }
 
 // ─── 유틸 ─────────────────────────────────────────────────────────────────────
@@ -214,6 +217,7 @@ function createInitialTables(count = 16): TableData[] {
       tableHeight: TABLE_HEIGHT,
       capacity: 4,
       rotation: 0,
+      chairAngles: initChairAngles(4),
     }
   })
 }
@@ -222,19 +226,24 @@ function createFloor(id: number, index: number): FloorData {
   return { id, label: `${index}층`, tables: [], tableCount: 0 }
 }
 
-// ─── SVG 의자 ─────────────────────────────────────────────────────────────────
-function SvgChair({ x, y, rotate, filled, filledColor, emptyColor }: {
+// ─── SVG 의자 (편집 모드에서 드래그 가능) ────────────────────────────────────
+function SvgDraggableChair({ x, y, rotate, filled, filledColor, emptyColor, isEditMode, onDragStart }: {
   x: number; y: number; rotate: number; filled: boolean
   filledColor: string; emptyColor: string
+  isEditMode: boolean
+  onDragStart?: (e: React.MouseEvent) => void
 }) {
   return (
     <rect
       x={x - CHAIR_W / 2} y={y - CHAIR_H / 2}
       width={CHAIR_W} height={CHAIR_H} rx={3}
       fill={filled ? filledColor : emptyColor}
-      stroke={filled ? filledColor : "#d1d5db"}
-      strokeWidth={0.5}
+      stroke={isEditMode ? "#6b7280" : (filled ? filledColor : "#d1d5db")}
+      strokeWidth={isEditMode ? 1 : 0.5}
+      strokeDasharray={isEditMode ? "none" : undefined}
       transform={`rotate(${rotate},${x},${y})`}
+      onMouseDown={isEditMode ? onDragStart : undefined}
+      style={{ cursor: isEditMode ? "grab" : "default" }}
     />
   )
 }
@@ -273,6 +282,7 @@ interface DraggableTableProps {
   onShapeChange: (id: number, shape: TableShape) => void
   onCapacityChange: (id: number, delta: number) => void
   onRotationChange: (id: number, deg: number) => void
+  onChairAngleChange: (id: number, chairIdx: number, angle: number) => void
 }
 
 const SHAPES: { key: TableShape; label: string; icon: string }[] = [
@@ -282,7 +292,7 @@ const SHAPES: { key: TableShape; label: string; icon: string }[] = [
 ]
 
 const DraggableTable = memo(function DraggableTable({
-  table, onLogOpen, isEditMode, onResize, onShapeChange, onCapacityChange, onRotationChange,
+  table, onLogOpen, isEditMode, onResize, onShapeChange, onCapacityChange, onRotationChange, onChairAngleChange,
 }: DraggableTableProps) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: table.id,
@@ -305,13 +315,41 @@ const DraggableTable = memo(function DraggableTable({
 
   // SVG 좌표
   const cd = CHAIR_DEPTH
-  const tx = cd                  // 테이블 좌상단 x
-  const ty = cd                  // 테이블 좌상단 y
-  const cx = tx + w / 2          // 테이블 중심 x
-  const cy = ty + h / 2          // 테이블 중심 y
-  const radius = shape === "circle" ? "50%" : shape === "rounded" ? `${Math.min(w,h)*0.3}px` : "10px"
+  const cx = cd + w / 2   // 테이블 중심 x (SVG 내부)
+  const cy = cd + h / 2   // 테이블 중심 y (SVG 내부)
 
-  const chairs = getChairPositions(shape, w, h, capacity, table.personCount)
+  // 의자 각도 배열 (없으면 균등 초기화)
+  const angles = (table.chairAngles && table.chairAngles.length === capacity)
+    ? table.chairAngles
+    : initChairAngles(capacity)
+  const chairs = getChairPositions(shape, w, h, cx, cy, angles, table.personCount)
+
+  // SVG ref — 의자 드래그 시 화면 좌표 → 각도 변환에 사용
+  const svgRef = useRef<SVGSVGElement>(null)
+
+  // 의자 드래그 핸들러
+  const handleChairMouseDown = useCallback((chairIdx: number) => (e: React.MouseEvent) => {
+    e.stopPropagation()
+    e.preventDefault()
+    const tableRotRad = rotation * Math.PI / 180
+
+    const onMove = (me: MouseEvent) => {
+      if (!svgRef.current) return
+      const rect = svgRef.current.getBoundingClientRect()
+      const screenCx = (rect.left + rect.right) / 2
+      const screenCy = (rect.top  + rect.bottom) / 2
+      const rawAngle = Math.atan2(me.clientY - screenCy, me.clientX - screenCx)
+      // SVG가 rotation만큼 돌아있으므로 역방향으로 보정
+      const localAngle = ((rawAngle - tableRotRad) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2)
+      onChairAngleChange(table.id, chairIdx, localAngle)
+    }
+    const onUp = () => {
+      window.removeEventListener("mousemove", onMove)
+      window.removeEventListener("mouseup", onUp)
+    }
+    window.addEventListener("mousemove", onMove)
+    window.addEventListener("mouseup", onUp)
+  }, [rotation, table.id, onChairAngleChange])
 
   // ── 리사이즈 핸들 ──────────────────────────────────────────────────────────
   const resizeRef = useRef<{ startX: number; startY: number; startW: number; startH: number } | null>(null)
@@ -361,15 +399,18 @@ const DraggableTable = memo(function DraggableTable({
 
       {/* ── 탑뷰 SVG ─────────────────────────────────────────────────────── */}
       <svg
+        ref={svgRef}
         width={outerW} height={outerH}
         style={{ display: "block", transform: `rotate(${rotation}deg)`, transformOrigin: "center center", overflow: "visible" }}
         onClick={() => { if (!isEditMode) onLogOpen(table) }}
       >
         {/* 의자 */}
         {chairs.map((c, i) => (
-          <SvgChair key={i}
+          <SvgDraggableChair key={i}
             x={c.x} y={c.y} rotate={c.rotate} filled={c.filled}
             filledColor={colors.chairFilled} emptyColor={colors.chairEmpty}
+            isEditMode={isEditMode}
+            onDragStart={isEditMode ? handleChairMouseDown(i) : undefined}
           />
         ))}
 
@@ -382,7 +423,7 @@ const DraggableTable = memo(function DraggableTable({
           />
         ) : (
           <rect
-            x={tx} y={ty} width={w} height={h}
+            x={cd} y={cd} width={w} height={h}
             rx={shape === "rounded" ? Math.min(w,h)*0.3 : 10}
             fill={colors.bg} stroke={isCleaning ? "#ef4444" : colors.border}
             strokeWidth={isCleaning ? 2 : 1.5}
@@ -424,7 +465,7 @@ const DraggableTable = memo(function DraggableTable({
 
         {/* 로그 보기 안내 */}
         {!isEditMode && (
-          <text x={cx} y={ty + h - 5} textAnchor="middle" fontSize={8} fill="#9ca3af"
+          <text x={cx} y={cd + h - 5} textAnchor="middle" fontSize={8} fill="#9ca3af"
             style={{ userSelect: "none" }}>
             로그 보기
           </text>
@@ -499,14 +540,17 @@ const TableOverlay = memo(function TableOverlay({ table }: { table: TableData })
   const cd = CHAIR_DEPTH
   const cx = cd + w / 2
   const cy = cd + h / 2
-  const chairs = getChairPositions(shape, w, h, capacity, table.personCount)
+  const overlayAngles = (table.chairAngles && table.chairAngles.length === capacity)
+    ? table.chairAngles : initChairAngles(capacity)
+  const chairs = getChairPositions(shape, w, h, cx, cy, overlayAngles, table.personCount)
   return (
     <div style={{ width: outerW, height: outerH, willChange: "transform", opacity: 0.85 }}>
       <svg width={outerW} height={outerH}
         style={{ display: "block", transform: `rotate(${rotation}deg)`, transformOrigin: "center center", overflow: "visible" }}>
         {chairs.map((c, i) => (
-          <SvgChair key={i} x={c.x} y={c.y} rotate={c.rotate} filled={c.filled}
-            filledColor={colors.chairFilled} emptyColor={colors.chairEmpty} />
+          <SvgDraggableChair key={i} x={c.x} y={c.y} rotate={c.rotate} filled={c.filled}
+            filledColor={colors.chairFilled} emptyColor={colors.chairEmpty}
+            isEditMode={false} />
         ))}
         {shape === "circle" ? (
           <ellipse cx={cx} cy={cy} rx={w/2} ry={h/2} fill={colors.bg} stroke={colors.border} strokeWidth={1.5} />
@@ -841,15 +885,19 @@ export default function SeatManagementPage() {
   // ── [4] 저장 (신규 floors API → 폴백: 구 save API) ──────────────────────
   // status/awayTime/personCount 는 AI 전용 — 레이아웃(name, posX, posY)만 전송
   const toLayoutOnly = (tables: TableData[]) =>
-    tables.map(({ id, name, posX, posY, shape, tableWidth, tableHeight, capacity, rotation }) => ({
-      id, name, posX, posY,
-      status: "available", personCount: 0,
-      shape:       shape       ?? "rect",
-      tableWidth:  tableWidth  ?? TABLE_WIDTH,
-      tableHeight: tableHeight ?? TABLE_HEIGHT,
-      capacity:    capacity    ?? 4,
-      rotation:    rotation    ?? 0,
-    }))
+    tables.map(({ id, name, posX, posY, shape, tableWidth, tableHeight, capacity, rotation, chairAngles }) => {
+      const cap = capacity ?? 4
+      return {
+        id, name, posX, posY,
+        status: "available", personCount: 0,
+        shape:       shape       ?? "rect",
+        tableWidth:  tableWidth  ?? TABLE_WIDTH,
+        tableHeight: tableHeight ?? TABLE_HEIGHT,
+        capacity:    cap,
+        rotation:    rotation    ?? 0,
+        chairAngles: (chairAngles && chairAngles.length === cap) ? chairAngles : initChairAngles(cap),
+      }
+    })
 
   const handleSaveChanges = async () => {
     try {
@@ -1012,6 +1060,7 @@ export default function SeatManagementPage() {
           tableHeight: TABLE_HEIGHT,
           capacity: 4,
           rotation: 0,
+          chairAngles: initChairAngles(4),
         }
       })
       setFloors(prev => prev.map(f =>
@@ -1048,11 +1097,13 @@ export default function SeatManagementPage() {
     }))
   }, [setTables])
 
-  // ── capacity 조절 ─────────────────────────────────────────────────────────────
+  // ── capacity 조절 (변경 시 chairAngles 재초기화) ──────────────────────────────
   const handleCapacityChange = useCallback((id: number, delta: number) => {
-    setTables(prev => prev.map(t =>
-      t.id === id ? { ...t, capacity: Math.max(1, Math.min(8, (t.capacity ?? 4) + delta)) } : t
-    ))
+    setTables(prev => prev.map(t => {
+      if (t.id !== id) return t
+      const newCapacity = Math.max(1, Math.min(8, (t.capacity ?? 4) + delta))
+      return { ...t, capacity: newCapacity, chairAngles: initChairAngles(newCapacity) }
+    }))
   }, [setTables])
 
   // ── rotation 변경 ─────────────────────────────────────────────────────────────
@@ -1060,6 +1111,19 @@ export default function SeatManagementPage() {
     setTables(prev => prev.map(t =>
       t.id === id ? { ...t, rotation: deg } : t
     ))
+  }, [setTables])
+
+  // ── 의자 각도 변경 ────────────────────────────────────────────────────────────
+  const handleChairAngleChange = useCallback((id: number, chairIdx: number, angle: number) => {
+    setTables(prev => prev.map(t => {
+      if (t.id !== id) return t
+      const capacity = t.capacity ?? 4
+      const current  = (t.chairAngles && t.chairAngles.length === capacity)
+        ? t.chairAngles : initChairAngles(capacity)
+      const next = [...current]
+      next[chairIdx] = angle
+      return { ...t, chairAngles: next }
+    }))
   }, [setTables])
 
   // ── 로그 fetch (테이블·날짜 변경 시 공통 사용) ─────────────────────────────
@@ -1247,6 +1311,7 @@ export default function SeatManagementPage() {
                           onShapeChange={handleShapeChange}
                           onCapacityChange={handleCapacityChange}
                           onRotationChange={handleRotationChange}
+                          onChairAngleChange={handleChairAngleChange}
                         />
                       ))}
                     </div>
