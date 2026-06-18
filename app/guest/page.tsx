@@ -8,14 +8,15 @@ import { Label } from "@/components/ui/label"
 import Link from "next/link"
 
 // ─── 상수 (seat-management와 동일) ────────────────────────────────────────────
-const TABLE_WIDTH       = 120
-const TABLE_HEIGHT      = 100
-const ICON_SIZE         = Math.round(TABLE_WIDTH / 6) // 20px
-const PERSON_ROW_HEIGHT = ICON_SIZE + 16
-const TOTAL_HEIGHT      = TABLE_HEIGHT + PERSON_ROW_HEIGHT
+const TABLE_WIDTH  = 120
+const TABLE_HEIGHT = 100
+const CHAIR_DEPTH  = 14
+const CHAIR_W      = 18
+const CHAIR_H      = 8
 
 // ─── 타입 ─────────────────────────────────────────────────────────────────────
 type TableStatus = "active" | "away" | "available" | "cleaning"
+type TableShape  = "rect" | "rounded" | "circle"
 
 interface TableData {
   id: number
@@ -25,6 +26,13 @@ interface TableData {
   posX: number
   posY: number
   personCount: number
+  shape?: TableShape
+  tableWidth?: number
+  tableHeight?: number
+  capacity?: number
+  rotation?: number
+  chairAngles?: number[]
+  floorNumber?: number
 }
 
 interface FloorData {
@@ -33,11 +41,173 @@ interface FloorData {
   tables: TableData[]
 }
 
-// ─── seats flat list → floors 배열로 변환 ────────────────────────────────────
-function groupSeatsByFloor(seats: TableData[]): Array<{ id: number; label: string; tables: TableData[] }> {
+// ─── 스타일 ───────────────────────────────────────────────────────────────────
+const statusConfig: Record<TableStatus, { label: string }> = {
+  active:    { label: "사용중"   },
+  away:      { label: "자리비움" },
+  available: { label: "이용가능" },
+  cleaning:  { label: "청소중"   },
+}
+
+const statusSvgColors: Record<TableStatus, {
+  bg: string; border: string; dot: string; chairFilled: string; chairEmpty: string; text: string
+}> = {
+  active:    { bg:"#ecfdf5", border:"#6ee7b7", dot:"#10b981", chairFilled:"#10b981", chairEmpty:"#d1fae5", text:"#065f46" },
+  away:      { bg:"#fefce8", border:"#fde68a", dot:"#f59e0b", chairFilled:"#f59e0b", chairEmpty:"#fef3c7", text:"#92400e" },
+  available: { bg:"#f9fafb", border:"#e5e7eb", dot:"#9ca3af", chairFilled:"#9ca3af", chairEmpty:"#f3f4f6", text:"#6b7280" },
+  cleaning:  { bg:"#fff1f2", border:"#fca5a5", dot:"#ef4444", chairFilled:"#ef4444", chairEmpty:"#fee2e2", text:"#991b1b" },
+}
+
+// ─── 의자 유틸 ────────────────────────────────────────────────────────────────
+function initChairAngles(capacity: number): number[] {
+  return Array.from({ length: capacity }, (_, i) =>
+    ((i / capacity) * Math.PI * 2 - Math.PI / 2 + Math.PI * 2) % (Math.PI * 2)
+  )
+}
+
+function angleToChairPos(
+  angle: number, shape: TableShape | undefined,
+  tw: number, th: number, cx: number, cy: number
+): { x: number; y: number; rotate: number } {
+  const hw = tw / 2, hh = th / 2
+  const cos = Math.cos(angle), sin = Math.sin(angle)
+
+  if (shape === "circle") {
+    const ex = cos * hw, ey = sin * hh
+    return { x: cx + ex + cos * CHAIR_DEPTH, y: cy + ey + sin * CHAIR_DEPTH, rotate: (angle * 180 / Math.PI) + 90 }
+  }
+
+  const sx = Math.abs(cos) < 1e-9 ? Infinity : hw / Math.abs(cos)
+  const sy = Math.abs(sin) < 1e-9 ? Infinity : hh / Math.abs(sin)
+  const s  = Math.min(sx, sy)
+  const ex = cos * s, ey = sin * s
+
+  let nx: number, ny: number, chairRotate: number
+  if (sx <= sy) {
+    nx = ex >= 0 ? 1 : -1; ny = 0
+    chairRotate = ex >= 0 ? 90 : 270
+  } else {
+    nx = 0; ny = ey >= 0 ? 1 : -1
+    chairRotate = ey >= 0 ? 180 : 0
+  }
+  return { x: cx + ex + nx * CHAIR_DEPTH, y: cy + ey + ny * CHAIR_DEPTH, rotate: chairRotate }
+}
+
+function getChairPositions(
+  shape: TableShape | undefined,
+  tw: number, th: number, cx: number, cy: number,
+  angles: number[], personCount: number
+) {
+  return angles.map((angle, i) => ({
+    ...angleToChairPos(angle, shape, tw, th, cx, cy),
+    filled: i < (personCount ?? 0),
+  }))
+}
+
+// ─── SVG 의자 ─────────────────────────────────────────────────────────────────
+function GuestChair({ x, y, rotate, filled, filledColor, emptyColor }: {
+  x: number; y: number; rotate: number; filled: boolean
+  filledColor: string; emptyColor: string
+}) {
+  const hw = CHAIR_W / 2, hh = CHAIR_H / 2
+  return (
+    <rect
+      x={x - hw} y={y - hh} width={CHAIR_W} height={CHAIR_H} rx={3}
+      fill={filled ? filledColor : emptyColor}
+      stroke={filled ? filledColor : "#d1d5db"}
+      strokeWidth={1}
+      transform={`rotate(${rotate}, ${x}, ${y})`}
+    />
+  )
+}
+
+// ─── SVG 탑뷰 테이블 (읽기 전용) ─────────────────────────────────────────────
+function GuestTable({ table }: { table: TableData }) {
+  const shape    = table.shape    ?? "rect"
+  const w        = table.tableWidth  ?? TABLE_WIDTH
+  const h        = table.tableHeight ?? TABLE_HEIGHT
+  const capacity = table.capacity ?? 4
+  const rotation = table.rotation ?? 0
+  const cd       = CHAIR_DEPTH
+  const outerW   = w + cd * 2
+  const outerH   = h + cd * 2
+  const cx       = cd + w / 2
+  const cy       = cd + h / 2
+
+  const statusKey = (table.status?.toLowerCase() || "available") as TableStatus
+  const colors    = statusSvgColors[statusKey] ?? statusSvgColors.available
+  const label     = statusConfig[statusKey]?.label ?? ""
+  const isCleaning = statusKey === "cleaning"
+  const awaySeconds = table.awayTime ? parseInt(table.awayTime) : 0
+  const isWarning   = statusKey === "away" && awaySeconds >= 300
+
+  const angles = (table.chairAngles && table.chairAngles.length === capacity)
+    ? table.chairAngles
+    : initChairAngles(capacity)
+  const chairs = getChairPositions(shape, w, h, cx, cy, angles, table.personCount)
+
+  return (
+    <div style={{ position: "absolute", left: table.posX ?? 0, top: table.posY ?? 0 }}>
+      <svg
+        width={outerW} height={outerH}
+        style={{
+          display: "block",
+          transform: `rotate(${rotation}deg)`,
+          transformOrigin: "center center",
+          overflow: "visible",
+        }}
+      >
+        {/* 의자 */}
+        {chairs.map((c, i) => (
+          <GuestChair key={i} x={c.x} y={c.y} rotate={c.rotate} filled={c.filled}
+            filledColor={colors.chairFilled} emptyColor={colors.chairEmpty} />
+        ))}
+
+        {/* 테이블 바디 */}
+        {shape === "circle" ? (
+          <ellipse cx={cx} cy={cy} rx={w / 2} ry={h / 2}
+            fill={colors.bg} stroke={isCleaning ? "#ef4444" : colors.border}
+            strokeWidth={isCleaning ? 2 : 1.5} />
+        ) : (
+          <rect x={cd} y={cd} width={w} height={h}
+            rx={shape === "rounded" ? Math.min(w, h) * 0.3 : 10}
+            fill={colors.bg} stroke={isCleaning ? "#ef4444" : colors.border}
+            strokeWidth={isCleaning ? 2 : 1.5} />
+        )}
+
+        {/* 상태 점 */}
+        <circle cx={cx + w / 2 - 10} cy={cy - h / 2 + 10} r={4} fill={colors.dot}
+          className={isCleaning ? "animate-pulse" : ""} />
+
+        {/* 테이블 이름 */}
+        <text x={cx} y={cy - 6} textAnchor="middle" fontSize={11} fill={colors.text} fontWeight="600">
+          {table.name}
+        </text>
+
+        {/* 상태 텍스트 */}
+        <text x={cx} y={cy + 8} textAnchor="middle" fontSize={9} fill={colors.text}>
+          {label}
+        </text>
+
+        {/* 자리비움 시간 */}
+        {table.awayTime && awaySeconds > 0 && (
+          <text x={cx} y={cy + 20} textAnchor="middle" fontSize={8}
+            fill={isWarning ? "#ef4444" : "#b45309"}>
+            {awaySeconds >= 60
+              ? `${Math.floor(awaySeconds / 60)}분 ${awaySeconds % 60}초`
+              : `${awaySeconds}초`}
+          </text>
+        )}
+      </svg>
+    </div>
+  )
+}
+
+// ─── flat seats → floors 변환 ─────────────────────────────────────────────────
+function groupSeatsByFloor(seats: TableData[]): FloorData[] {
   const map = new Map<number, TableData[]>()
   for (const seat of seats) {
-    const fn = (seat as TableData & { floorNumber?: number }).floorNumber ?? 1
+    const fn = seat.floorNumber ?? 1
     if (!map.has(fn)) map.set(fn, [])
     map.get(fn)!.push(seat)
   }
@@ -46,189 +216,80 @@ function groupSeatsByFloor(seats: TableData[]): Array<{ id: number; label: strin
     .map(([fn, tables]) => ({ id: fn, label: `${fn}층`, tables }))
 }
 
-// ─── 스타일 ───────────────────────────────────────────────────────────────────
-const statusConfig = {
-  active:    { bg: "bg-emerald-50", border: "border-emerald-300", label: "사용중",   dot: "bg-emerald-500" },
-  away:      { bg: "bg-yellow-50",  border: "border-yellow-300",  label: "자리비움", dot: "bg-yellow-500"  },
-  available: { bg: "bg-gray-50",    border: "border-gray-200",    label: "이용가능", dot: "bg-gray-400"    },
-  cleaning:  { bg: "bg-red-50",     border: "border-red-300",     label: "청소중",   dot: "bg-red-500"     },
-}
-
-// ─── 사람 아이콘 (읽기 전용) ──────────────────────────────────────────────────
-function PersonIcon({ size, filled }: { size: number; filled: boolean }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24"
-      className={filled ? "text-gray-800" : "text-gray-300"}>
-      <circle cx="12" cy="7" r="4.5" fill="currentColor" />
-      <path d="M3 22c0-5 4-9 9-9s9 4 9 9" fill="currentColor" clipPath="inset(0 0 2px 0)" />
-    </svg>
-  )
-}
-
-// ─── 테이블 카드 (읽기 전용) ──────────────────────────────────────────────────
-function TableCard({ table }: { table: TableData }) {
-  const statusKey = (table.status?.toLowerCase() || "available") as TableStatus
-  const config = statusConfig[statusKey] || statusConfig.available
-  const awaySeconds = table.awayTime ? parseInt(table.awayTime) : 0
-  const isWarning = statusKey === "away" && awaySeconds >= 300  // 5분 이상 경고
-
-  return (
-    <div
-      style={{
-        position: "absolute",
-        left: table.posX ?? 0,
-        top: table.posY ?? 0,
-        width: TABLE_WIDTH,
-        height: TOTAL_HEIGHT,
-      }}
-    >
-      <div
-        className={`flex flex-col overflow-hidden rounded-xl border ${config.bg} ${config.border}`}
-        style={{ height: TOTAL_HEIGHT }}
-      >
-        {/* 테이블 정보 */}
-        <div className="relative flex flex-1 flex-col items-center justify-center px-3 text-center">
-          <div className="absolute right-2 top-2">
-            <span className={`inline-block h-2 w-2 rounded-full ${config.dot}`} />
-          </div>
-          <div className="text-sm font-semibold text-gray-900">{table.name}</div>
-          <div className="mt-0.5 text-xs text-gray-500">{config.label}</div>
-          {table.awayTime && (
-            <div className={`mt-0.5 text-xs font-medium ${isWarning ? "text-red-500" : "text-yellow-600"}`}>
-              {awaySeconds >= 60 ? `${Math.floor(awaySeconds / 60)}분 ${awaySeconds % 60}초` : `${awaySeconds}초`}
-            </div>
-          )}
-        </div>
-
-        {/* 구분선 */}
-        <div className={`h-px w-full border-t ${config.border}`} />
-
-        {/* 인원 아이콘 (읽기 전용) */}
-        <div
-          className="flex items-center justify-center gap-0.5 bg-white/60 px-2"
-          style={{ height: PERSON_ROW_HEIGHT }}
-        >
-          {Array.from({ length: 4 }).map((_, i) => (
-            <PersonIcon key={i} size={ICON_SIZE} filled={i < (table.personCount ?? 0)} />
-          ))}
-        </div>
-      </div>
-    </div>
-  )
+// ─── 서버에서 층 데이터 로드 ─────────────────────────────────────────────────
+async function fetchFloorsFromServer(cafeName: string): Promise<FloorData[] | null> {
+  try {
+    const res = await fetch(
+      `http://34.64.58.23:8080/api/seats/floors?cafeName=${encodeURIComponent(cafeName)}`
+    )
+    if (res.ok) {
+      const data: Array<{ floorNumber: number; label: string; seats: TableData[] }> = await res.json()
+      if (data && data.some(f => (f.seats ?? []).length > 0)) {
+        return data.map(f => ({ id: f.floorNumber, label: f.label, tables: f.seats ?? [] }))
+      }
+    }
+  } catch {}
+  // 폴백: search API
+  try {
+    const res = await fetch(
+      `http://34.64.58.23:8080/api/seats/search?cafeName=${encodeURIComponent(cafeName)}`
+    )
+    if (res.ok) {
+      const seats: TableData[] = await res.json()
+      if (seats && seats.length > 0) return groupSeatsByFloor(seats)
+    }
+  } catch {}
+  return null
 }
 
 // ─── 메인 ─────────────────────────────────────────────────────────────────────
 export default function GuestPage() {
-  const [cafeName, setCafeName] = useState("")
+  const [cafeName, setCafeName]   = useState("")
   const [inputValue, setInputValue] = useState("")
   const [showInput, setShowInput] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
 
-  // 층 상태
-  const [floors, setFloors] = useState<FloorData[]>([])
+  const [floors, setFloors]             = useState<FloorData[]>([])
   const [activeFloorId, setActiveFloorId] = useState<number>(1)
   const floorsRef = useRef<FloorData[]>([])
   useEffect(() => { floorsRef.current = floors }, [floors])
 
-  const currentFloor = floors.find(f => f.id === activeFloorId) ?? floors[0]
-  const tables = currentFloor?.tables ?? []
-
-  const availableCount = tables.filter(t => t.status === "available").length
-  const activeCount    = tables.filter(t => t.status === "active").length
-  const awayCount      = tables.filter(t => t.status === "away").length
-  const cleaningCount  = tables.filter(t => t.status === "cleaning").length
+  const currentFloor    = floors.find(f => f.id === activeFloorId) ?? floors[0]
+  const tables          = currentFloor?.tables ?? []
+  const availableCount  = tables.filter(t => t.status === "available").length
+  const activeCount     = tables.filter(t => t.status === "active").length
+  const awayCount       = tables.filter(t => t.status === "away").length
+  const cleaningCount   = tables.filter(t => t.status === "cleaning").length
 
   // ── 초기 로딩 ───────────────────────────────────────────────────────────
   useEffect(() => {
     const storedCafeName = sessionStorage.getItem("guestCafeName")
-    if (!storedCafeName) {
-      setShowInput(true)
-      setIsLoading(false)
-      return
-    }
+    if (!storedCafeName) { setShowInput(true); setIsLoading(false); return }
     setCafeName(storedCafeName)
 
-    const fetchSeats = async () => {
+    const load = async () => {
       setIsLoading(true)
       try {
-        // ── 1. localStorage에서 전체 배치 레이아웃 로드 (위치 정보 기준) ──
-        let layoutFloors: Array<{ id: number; label: string; tables: TableData[] }> | null = null
+        // 서버 데이터 우선 (shape/size/chairAngles 모두 포함)
+        const serverFloors = await fetchFloorsFromServer(storedCafeName)
+        if (serverFloors && serverFloors.length > 0) {
+          setFloors(serverFloors)
+          setActiveFloorId(serverFloors[0].id)
+          setIsLoading(false)
+          return
+        }
+        // 서버 실패 → localStorage 폴백
         try {
           const raw = localStorage.getItem(`cafemonitor-floor-layout-${storedCafeName}`)
-          if (raw) layoutFloors = JSON.parse(raw)
+          if (raw) {
+            const local: FloorData[] = JSON.parse(raw)
+            if (local.length > 0) { setFloors(local); setActiveFloorId(local[0].id); setIsLoading(false); return }
+          }
         } catch {}
-
-        // ── 2. 서버에서 실시간 상태 로드 ──────────────────────────────────
-        // floors API 시도
-        let serverFloors: Array<{ id: number; tables: TableData[] }> | null = null
-        const floorsRes = await fetch(
-          `http://34.64.58.23:8080/api/seats/floors?cafeName=${encodeURIComponent(storedCafeName)}`
-        )
-        if (floorsRes.ok) {
-          const raw: Array<{ floorNumber: number; label: string; seats: TableData[] }> = await floorsRes.json()
-          if (raw && raw.length > 0) {
-            serverFloors = raw.map(f => ({ id: f.floorNumber, tables: f.seats ?? [] }))
-          }
-        }
-        // floors API 실패 → search API 폴백
-        if (!serverFloors) {
-          const searchRes = await fetch(
-            `http://34.64.58.23:8080/api/seats/search?cafeName=${encodeURIComponent(storedCafeName)}`
-          )
-          if (searchRes.ok) {
-            const seats: TableData[] = await searchRes.json()
-            if (seats && seats.length > 0) {
-              serverFloors = groupSeatsByFloor(seats).map(f => ({ id: f.id, tables: f.tables }))
-            }
-          }
-        }
-
-        // ── 3. 레이아웃(위치) + 서버(상태) 병합 ──────────────────────────
-        let finalFloors: Array<{ id: number; label: string; tables: TableData[] }> | null = null
-
-        if (layoutFloors && layoutFloors.length > 0) {
-          // localStorage 레이아웃 기준으로 층 구성, 서버 상태를 name 기준으로 덮어씀
-          const serverStatusMap = new Map<string, { status: string; awayTime?: string; personCount: number }>()
-          for (const sf of serverFloors ?? []) {
-            for (const t of sf.tables) {
-              serverStatusMap.set(t.name, {
-                status: t.status,
-                awayTime: t.awayTime,
-                personCount: t.personCount ?? 0,
-              })
-            }
-          }
-          finalFloors = layoutFloors.map(f => ({
-            id: f.id,
-            label: f.label,
-            tables: f.tables.map(t => {
-              const live = serverStatusMap.get(t.name)
-              return live ? { ...t, status: live.status as TableData["status"], awayTime: live.awayTime, personCount: live.personCount } : t
-            }),
-          }))
-        } else if (serverFloors && serverFloors.length > 0) {
-          // localStorage 없음 → 서버 데이터만 사용 (floors API는 label 포함)
-          const floorsRes2 = await fetch(
-            `http://34.64.58.23:8080/api/seats/floors?cafeName=${encodeURIComponent(storedCafeName)}`
-          )
-          if (floorsRes2.ok) {
-            const raw: Array<{ floorNumber: number; label: string; seats: TableData[] }> = await floorsRes2.json()
-            finalFloors = raw.map(f => ({ id: f.floorNumber, label: f.label, tables: f.seats ?? [] }))
-          } else {
-            finalFloors = groupSeatsByFloor(
-              serverFloors.flatMap(f => f.tables)
-            )
-          }
-        }
-
-        if (finalFloors && finalFloors.length > 0) {
-          setFloors(finalFloors)
-          setActiveFloorId(finalFloors[0].id)
-        } else {
-          sessionStorage.removeItem("guestCafeName")
-          setShowInput(true)
-          alert("카페 정보를 찾을 수 없습니다. 다시 입력해주세요.")
-        }
+        // 데이터 없음
+        sessionStorage.removeItem("guestCafeName")
+        setShowInput(true)
+        alert("카페 정보를 찾을 수 없습니다. 다시 입력해주세요.")
       } catch {
         sessionStorage.removeItem("guestCafeName")
         setShowInput(true)
@@ -236,13 +297,12 @@ export default function GuestPage() {
         setIsLoading(false)
       }
     }
-    fetchSeats()
+    load()
   }, [])
 
-  // ── SSE 실시간 수신 (AI 업데이트 즉시 반영) ──────────────────────────────
+  // ── SSE 실시간 수신 ──────────────────────────────────────────────────────
   useEffect(() => {
     if (!cafeName || isLoading) return
-
     const es = new EventSource(`http://34.64.58.23:8080/api/seats/stream`)
 
     es.addEventListener("seat-update", (e: MessageEvent) => {
@@ -252,7 +312,6 @@ export default function GuestPage() {
           floorId: number
           seats: Array<{ name: string; status: string; awayTime: string; personCount: number }>
         } = JSON.parse(e.data)
-
         if (event.cafeName !== cafeName) return
 
         const statusMap = new Map<string, { status: TableStatus; awayTime?: string; personCount: number }>()
@@ -273,77 +332,26 @@ export default function GuestPage() {
             return { ...t, status: live.status, awayTime: live.awayTime, personCount: live.personCount }
           }),
         })))
-      } catch { /* 파싱 오류 무시 */ }
+      } catch {}
     })
 
-    es.onerror = () => { /* EventSource 자동 재연결 */ }
-
+    es.onerror = () => {}
     return () => es.close()
   }, [cafeName, isLoading])
 
   // ── 카페명 검색 ──────────────────────────────────────────────────────────
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    const inputName = inputValue.trim()
-    if (!inputName) return
+    const name = inputValue.trim()
+    if (!name) return
     setIsLoading(true)
     try {
-      // localStorage 레이아웃 로드
-      let layoutFloors: Array<{ id: number; label: string; tables: TableData[] }> | null = null
-      try {
-        const raw = localStorage.getItem(`cafemonitor-floor-layout-${inputName}`)
-        if (raw) layoutFloors = JSON.parse(raw)
-      } catch {}
-
-      // 서버 상태 로드
-      let serverFloors: Array<{ id: number; tables: TableData[] }> | null = null
-      const floorsRes = await fetch(
-        `http://34.64.58.23:8080/api/seats/floors?cafeName=${encodeURIComponent(inputName)}`
-      )
-      if (floorsRes.ok) {
-        const raw: Array<{ floorNumber: number; label: string; seats: TableData[] }> = await floorsRes.json()
-        if (raw && raw.length > 0) {
-          serverFloors = raw.map(f => ({ id: f.floorNumber, tables: f.seats ?? [] }))
-        }
-      }
-      if (!serverFloors) {
-        const searchRes = await fetch(
-          `http://34.64.58.23:8080/api/seats/search?cafeName=${encodeURIComponent(inputName)}`
-        )
-        if (searchRes.ok) {
-          const seats: TableData[] = await searchRes.json()
-          if (seats && seats.length > 0) {
-            serverFloors = groupSeatsByFloor(seats).map(f => ({ id: f.id, tables: f.tables }))
-          }
-        }
-      }
-
-      // 레이아웃 + 서버 상태 병합
-      let finalFloors: Array<{ id: number; label: string; tables: TableData[] }> | null = null
-      if (layoutFloors && layoutFloors.length > 0) {
-        const statusMap = new Map<string, { status: string; awayTime?: string; personCount: number }>()
-        for (const sf of serverFloors ?? []) {
-          for (const t of sf.tables) {
-            statusMap.set(t.name, { status: t.status, awayTime: t.awayTime, personCount: t.personCount ?? 0 })
-          }
-        }
-        finalFloors = layoutFloors.map(f => ({
-          id: f.id,
-          label: f.label,
-          tables: f.tables.map(t => {
-            const live = statusMap.get(t.name)
-            return live ? { ...t, status: live.status as TableData["status"], awayTime: live.awayTime, personCount: live.personCount } : t
-          }),
-        }))
-      } else if (serverFloors) {
-        finalFloors = groupSeatsByFloor(serverFloors.flatMap(f => f.tables))
-      }
-
-      if (finalFloors && finalFloors.length > 0) {
-        sessionStorage.setItem("guestCafeName", inputName)
-        setCafeName(inputName)
-        setFloors(finalFloors)
-        setActiveFloorId(finalFloors[0].id)
+      const serverFloors = await fetchFloorsFromServer(name)
+      if (serverFloors && serverFloors.length > 0) {
+        sessionStorage.setItem("guestCafeName", name)
+        setCafeName(name)
+        setFloors(serverFloors)
+        setActiveFloorId(serverFloors[0].id)
         setShowInput(false)
       } else {
         alert("🚨 등록되지 않은 카페이거나, 아직 좌석 배치가 완료되지 않았습니다.\n카페 이름을 다시 확인해주세요!")
@@ -431,7 +439,7 @@ export default function GuestPage() {
       </header>
 
       <main className="mx-auto max-w-5xl px-4 py-8">
-        {/* 통계 요약 (현재 층 기준) */}
+        {/* 통계 요약 */}
         <div className={`mb-8 grid gap-4 ${cleaningCount > 0 ? "grid-cols-4" : "grid-cols-3"}`}>
           <div className="rounded-xl border border-emerald-300 bg-emerald-50 p-4 text-center">
             <div className="text-3xl font-bold text-emerald-500">{availableCount}</div>
@@ -457,9 +465,10 @@ export default function GuestPage() {
         <div className="mb-4 flex flex-wrap items-center gap-4">
           <span className="text-sm text-gray-500">범례:</span>
           {[
-            { color: "bg-emerald-500", label: "사용중" },
+            { color: "bg-emerald-500", label: "사용중"   },
             { color: "bg-yellow-500",  label: "자리비움" },
             { color: "bg-gray-400",    label: "이용가능" },
+            { color: "bg-red-400",     label: "청소중"   },
           ].map(({ color, label }) => (
             <div key={label} className="flex items-center gap-2">
               <span className={`h-3 w-3 rounded-full ${color}`} />
@@ -469,37 +478,30 @@ export default function GuestPage() {
         </div>
 
         {/* 층 선택 탭 */}
-        <div className="mb-4 flex flex-wrap items-center gap-2">
-          {floors.map((floor) => {
-            const isActive = activeFloorId === floor.id
-            return (
-              <button
-                key={floor.id}
-                type="button"
-                onClick={() => setActiveFloorId(floor.id)}
-                className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-medium transition-colors ${
-                  isActive
-                    ? "border-emerald-500 bg-white text-emerald-600"
-                    : "border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:text-gray-700"
-                }`}
-              >
-                <Building2 className={`h-3.5 w-3.5 shrink-0 ${isActive ? "text-emerald-500" : "text-gray-400"}`} />
-                {floor.label}
-              </button>
-            )
-          })}
-        </div>
+        {floors.length > 1 && (
+          <div className="mb-4 flex flex-wrap items-center gap-2">
+            {floors.map((floor) => {
+              const isActive = activeFloorId === floor.id
+              return (
+                <button key={floor.id} type="button" onClick={() => setActiveFloorId(floor.id)}
+                  className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-medium transition-colors ${
+                    isActive
+                      ? "border-emerald-500 bg-white text-emerald-600"
+                      : "border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:text-gray-700"
+                  }`}>
+                  <Building2 className={`h-3.5 w-3.5 shrink-0 ${isActive ? "text-emerald-500" : "text-gray-400"}`} />
+                  {floor.label}
+                </button>
+              )
+            })}
+          </div>
+        )}
 
-        {/* 배치도 캔버스 (읽기 전용 + 스크롤) */}
-        <div className="h-[500px] overflow-auto rounded-xl border border-gray-200">
-          {/* key={activeFloorId} → 층 전환 시 강제 리마운트로 이전 층 잔상 방지 */}
-          <div
-            key={activeFloorId}
-            className="relative bg-gray-100/50"
-            style={{ width: 1200, height: 900 }}
-          >
+        {/* 배치도 캔버스 (읽기 전용) */}
+        <div className="h-[600px] overflow-auto rounded-xl border border-gray-200 bg-gray-100/50">
+          <div key={activeFloorId} className="relative" style={{ width: 1200, height: 900 }}>
             {tables.map((table) => (
-              <TableCard key={`${activeFloorId}-${table.id}`} table={table} />
+              <GuestTable key={`${activeFloorId}-${table.id}`} table={table} />
             ))}
           </div>
         </div>
