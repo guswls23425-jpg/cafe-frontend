@@ -166,22 +166,41 @@ function angleToChairPos(
   const cos = Math.cos(angle)
   const sin = Math.sin(angle)
 
-  let ex: number, ey: number  // 테이블 엣지 위의 점
   if (shape === "circle") {
-    ex = cos * hw
-    ey = sin * hh
-  } else {
-    // 직사각형 엣지 교점 (방사 방향으로 스케일)
-    const sx = Math.abs(cos) < 1e-9 ? Infinity : hw / Math.abs(cos)
-    const sy = Math.abs(sin) < 1e-9 ? Infinity : hh / Math.abs(sin)
-    const s  = Math.min(sx, sy)
-    ex = cos * s
-    ey = sin * s
+    const ex = cos * hw
+    const ey = sin * hh
+    return {
+      x:      cx + ex + cos * CHAIR_DEPTH,
+      y:      cy + ey + sin * CHAIR_DEPTH,
+      rotate: (angle * 180 / Math.PI) + 90,
+    }
   }
+
+  // 직사각형/라운드: 엣지 교점 계산
+  const sx = Math.abs(cos) < 1e-9 ? Infinity : hw / Math.abs(cos)
+  const sy = Math.abs(sin) < 1e-9 ? Infinity : hh / Math.abs(sin)
+  const s  = Math.min(sx, sy)
+  const ex = cos * s
+  const ey = sin * s
+
+  // 어떤 엣지인지 판단해서 법선 방향(오프셋)과 의자 회전각을 수직/수평으로 고정
+  let nx: number, ny: number, chairRotate: number
+  if (sx <= sy) {
+    // 좌/우 엣지 (|ex| ≈ hw): 법선은 x 방향
+    nx = ex >= 0 ? 1 : -1
+    ny = 0
+    chairRotate = ex >= 0 ? 90 : 270
+  } else {
+    // 상/하 엣지 (|ey| ≈ hh): 법선은 y 방향
+    nx = 0
+    ny = ey >= 0 ? 1 : -1
+    chairRotate = ey >= 0 ? 180 : 0
+  }
+
   return {
-    x:      cx + ex + cos * CHAIR_DEPTH,
-    y:      cy + ey + sin * CHAIR_DEPTH,
-    rotate: (angle * 180 / Math.PI) + 90,
+    x:      cx + ex + nx * CHAIR_DEPTH,
+    y:      cy + ey + ny * CHAIR_DEPTH,
+    rotate: chairRotate,
   }
 }
 
@@ -338,9 +357,36 @@ const DraggableTable = memo(function DraggableTable({
       const rect = svgRef.current.getBoundingClientRect()
       const screenCx = (rect.left + rect.right) / 2
       const screenCy = (rect.top  + rect.bottom) / 2
-      const rawAngle = Math.atan2(me.clientY - screenCy, me.clientX - screenCx)
-      // SVG가 rotation만큼 돌아있으므로 역방향으로 보정
-      const localAngle = ((rawAngle - tableRotRad) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2)
+      const rawDx = me.clientX - screenCx
+      const rawDy = me.clientY - screenCy
+
+      let localAngle: number
+      if (shape === "circle") {
+        // 원형: 자유 각도 회전
+        const rawAngle = Math.atan2(rawDy, rawDx)
+        localAngle = ((rawAngle - tableRotRad) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2)
+      } else {
+        // 사각형/라운드: 테이블 로컬 좌표로 변환 후 가장 가까운 엣지에 투영
+        const cosR = Math.cos(-tableRotRad)
+        const sinR = Math.sin(-tableRotRad)
+        const localDx = rawDx * cosR - rawDy * sinR
+        const localDy = rawDx * sinR + rawDy * cosR
+        const hw = w / 2
+        const hh = h / 2
+        const normX = hw > 0 ? Math.abs(localDx) / hw : 0
+        const normY = hh > 0 ? Math.abs(localDy) / hh : 0
+        let px: number, py: number
+        if (normX >= normY) {
+          // 좌/우 엣지: x 고정, y 클램프
+          px = localDx >= 0 ? hw : -hw
+          py = Math.max(-hh, Math.min(hh, localDy))
+        } else {
+          // 상/하 엣지: y 고정, x 클램프
+          px = Math.max(-hw, Math.min(hw, localDx))
+          py = localDy >= 0 ? hh : -hh
+        }
+        localAngle = ((Math.atan2(py, px)) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2)
+      }
       onChairAngleChange(table.id, chairIdx, localAngle)
     }
     const onUp = () => {
@@ -349,7 +395,7 @@ const DraggableTable = memo(function DraggableTable({
     }
     window.addEventListener("mousemove", onMove)
     window.addEventListener("mouseup", onUp)
-  }, [rotation, table.id, onChairAngleChange])
+  }, [rotation, shape, w, h, table.id, onChairAngleChange])
 
   // ── 리사이즈 핸들 ──────────────────────────────────────────────────────────
   const resizeRef = useRef<{ startX: number; startY: number; startW: number; startH: number } | null>(null)
@@ -644,8 +690,8 @@ export default function SeatManagementPage() {
         nextFloorId,
         floors: floors.map(f => ({
           ...f,
-          tables: f.tables.map(({ id, name, posX, posY }) => ({
-            id, name, posX, posY,
+          tables: f.tables.map(({ id, name, posX, posY, shape, tableWidth, tableHeight, capacity, rotation, chairAngles }) => ({
+            id, name, posX, posY, shape, tableWidth, tableHeight, capacity, rotation, chairAngles,
             status: "available" as TableStatus,
             personCount: 0,
           })),
