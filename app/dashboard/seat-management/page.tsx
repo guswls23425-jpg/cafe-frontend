@@ -290,10 +290,19 @@ export default function SeatManagementPage() {
   const [logDialogTable, setLogDialogTable] = useState<TableData | null>(null)
   const [aiLogs, setAiLogs] = useState<AiLog[]>([])
   const [isLogLoading, setIsLogLoading] = useState(false)
+  const [selectedLogDate, setSelectedLogDate] = useState<string>(
+    () => new Date().toISOString().slice(0, 10)
+  )
 
   // 실시간 이벤트 로그
   const EVENT_LOG_KEY = "cafemonitor-event-log"
-  const [eventLog, setEventLog] = useState<EventItem[]>([])
+  const [eventLog, setEventLog] = useState<EventItem[]>(() => {
+    if (typeof window === "undefined") return []
+    try {
+      const raw = localStorage.getItem(EVENT_LOG_KEY)
+      return raw ? JSON.parse(raw) : []
+    } catch { return [] }
+  })
 
   // 폴링용 floors ref (stale closure 방지)
   const floorsRef = useRef<FloorData[]>([])
@@ -356,14 +365,6 @@ export default function SeatManagementPage() {
       localStorage.setItem(FLOORS_STORAGE_KEY, JSON.stringify(layoutToSave))
     } catch {}
   }, [floors, activeFloorId, nextFloorId])
-
-  // 마운트 시 eventLog localStorage 복구 (hydration 이후에만 실행)
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(EVENT_LOG_KEY)
-      if (raw) setEventLog(JSON.parse(raw))
-    } catch {}
-  }, [])
 
   // eventLog가 변경될 때마다 localStorage에 저장
   useEffect(() => {
@@ -769,13 +770,14 @@ export default function SeatManagementPage() {
   }
 
 
-  // ── 로그 다이얼로그 열기 ──────────────────────────────────────────────────
-  const handleLogOpen = useCallback(async (table: TableData) => {
-    setLogDialogTable(table)
+  // ── 로그 fetch (테이블·날짜 변경 시 공통 사용) ─────────────────────────────
+  const fetchAiLogs = useCallback(async (seatId: number, date: string) => {
     setAiLogs([])
     setIsLogLoading(true)
     try {
-      const res = await fetch(`http://34.64.58.23:8080/api/ai/sender?seatId=${table.id}`)
+      const res = await fetch(
+        `http://34.64.58.23:8080/api/ai/logs/seat?seatId=${seatId}&date=${date}`
+      )
       if (res.ok) {
         const data: AiLog[] = await res.json()
         setAiLogs(data)
@@ -783,6 +785,14 @@ export default function SeatManagementPage() {
     } catch { /* 로그 없음 */ }
     finally { setIsLogLoading(false) }
   }, [])
+
+  // ── 로그 다이얼로그 열기 ──────────────────────────────────────────────────
+  const handleLogOpen = useCallback(async (table: TableData) => {
+    const today = new Date().toISOString().slice(0, 10)
+    setLogDialogTable(table)
+    setSelectedLogDate(today)
+    fetchAiLogs(table.id, today)
+  }, [fetchAiLogs])
 
   const resetPositions = () =>
     setTables(prev => prev.map((t, i) => ({
@@ -1035,6 +1045,21 @@ export default function SeatManagementPage() {
               )}
               {logDialogTable?.name} — 이벤트 로그
             </DialogTitle>
+            {/* 날짜 선택기 */}
+            <div className="flex items-center gap-2 pt-1">
+              <input
+                type="date"
+                value={selectedLogDate}
+                max={new Date().toISOString().slice(0, 10)}
+                onChange={(e) => {
+                  const date = e.target.value
+                  setSelectedLogDate(date)
+                  if (logDialogTable) fetchAiLogs(logDialogTable.id, date)
+                }}
+                className="rounded-md border border-gray-200 bg-white px-2 py-1 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-300"
+              />
+              <span className="text-xs text-gray-400">날짜를 선택해 이력을 조회하세요</span>
+            </div>
           </DialogHeader>
 
           {/* 현재 상태 뱃지 */}

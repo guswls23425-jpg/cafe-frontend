@@ -239,45 +239,46 @@ export default function GuestPage() {
     fetchSeats()
   }, [])
 
-  // ── DB 상태 실시간 폴링 (5초 간격) ───────────────────────────────────────
+  // ── SSE 실시간 수신 (AI 업데이트 즉시 반영) ──────────────────────────────
   useEffect(() => {
     if (!cafeName || isLoading) return
 
-    const poll = async () => {
-      try {
-        const res = await fetch(
-          `http://34.64.58.23:8080/api/seats/floors?cafeName=${encodeURIComponent(cafeName)}`
-        )
-        if (!res.ok) return
-        const data: Array<{ floorNumber: number; label: string; seats: TableData[] }> = await res.json()
-        if (!data || data.length === 0) return
+    const es = new EventSource(`http://34.64.58.23:8080/api/seats/stream`)
 
-        // name 기준으로 서버 상태 맵 구성
+    es.addEventListener("seat-update", (e: MessageEvent) => {
+      try {
+        const event: {
+          cafeName: string
+          floorId: number
+          seats: Array<{ name: string; status: string; awayTime: string; personCount: number }>
+        } = JSON.parse(e.data)
+
+        if (event.cafeName !== cafeName) return
+
         const statusMap = new Map<string, { status: TableStatus; awayTime?: string; personCount: number }>()
-        for (const floor of data) {
-          for (const seat of floor.seats ?? []) {
-            statusMap.set(seat.name, {
-              status: seat.status as TableStatus,
-              awayTime: seat.awayTime,
-              personCount: seat.personCount ?? 0,
-            })
-          }
+        for (const seat of event.seats) {
+          statusMap.set(seat.name, {
+            status: seat.status as TableStatus,
+            awayTime: seat.awayTime || undefined,
+            personCount: seat.personCount ?? 0,
+          })
         }
 
-        // 위치는 유지, 상태/인원만 갱신
         setFloors(prev => prev.map(f => ({
           ...f,
           tables: f.tables.map(t => {
             const live = statusMap.get(t.name)
             if (!live) return t
+            if (live.status === t.status && live.awayTime === t.awayTime && live.personCount === t.personCount) return t
             return { ...t, status: live.status, awayTime: live.awayTime, personCount: live.personCount }
           }),
         })))
-      } catch { /* 폴링 오류 무시 */ }
-    }
+      } catch { /* 파싱 오류 무시 */ }
+    })
 
-    const id = setInterval(poll, 5000)
-    return () => clearInterval(id)
+    es.onerror = () => { /* EventSource 자동 재연결 */ }
+
+    return () => es.close()
   }, [cafeName, isLoading])
 
   // ── 카페명 검색 ──────────────────────────────────────────────────────────
