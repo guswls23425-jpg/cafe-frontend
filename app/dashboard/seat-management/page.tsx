@@ -108,10 +108,29 @@ interface TableData {
 }
 
 interface FloorData {
-  id: number          // 고유 id (삭제 후에도 중복 없음)
-  label: string       // "1층", "2층", ...
+  id: number
+  label: string
   tables: TableData[]
   tableCount: number
+  restrooms: RestroomMarker[]
+  windows: WindowMarker[]
+}
+
+type RestroomType = "male" | "female" | "both"
+
+interface RestroomMarker {
+  id: number
+  type: RestroomType
+  posX: number
+  posY: number
+}
+
+interface WindowMarker {
+  id: number
+  posX: number
+  posY: number
+  angle: number   // degrees, 0 = 가로
+  length: number  // px, 기본 80, 최소 40
 }
 
 // ─── 상수 ─────────────────────────────────────────────────────────────────────
@@ -242,7 +261,212 @@ function createInitialTables(count = 16): TableData[] {
 }
 
 function createFloor(id: number, index: number): FloorData {
-  return { id, label: `${index}층`, tables: [], tableCount: 0 }
+  return { id, label: `${index}층`, tables: [], tableCount: 0, restrooms: [], windows: [] }
+}
+
+// ─── 화장실 바 아이콘 ────────────────────────────────────────────────────────
+const RESTROOM_LEN  = 24   // 바 길이 (기존 실루엣 높이 26과 유사)
+const RESTROOM_T    = 5    // 두께 = 창문과 동일
+const RESTROOM_GAP  = 3    // both 타입 두 바 사이 간격
+
+const RESTROOM_COLORS: Record<RestroomType, string[]> = {
+  male:   ["#1D4ED8"],
+  female: ["#DC2626"],
+  both:   ["#1D4ED8", "#DC2626"],
+}
+
+function restroomSize(type: RestroomType) {
+  if (type === "both") return { w: RESTROOM_LEN * 2 + RESTROOM_GAP, h: RESTROOM_T }
+  return { w: RESTROOM_LEN, h: RESTROOM_T }
+}
+
+function RestroomSvg({ type }: { type: RestroomType }) {
+  const { w, h } = restroomSize(type)
+  const colors = RESTROOM_COLORS[type]
+  return (
+    <svg width={w} height={h} style={{ display: "block" }}>
+      {colors.map((color, i) => (
+        <rect key={i} x={i * (RESTROOM_LEN + RESTROOM_GAP)} y={0} width={RESTROOM_LEN} height={RESTROOM_T}
+          rx={2} fill={color} />
+      ))}
+    </svg>
+  )
+}
+
+function RestroomMiniIcon({ type }: { type: RestroomType }) {
+  return <RestroomSvg type={type} />
+}
+
+// ─── 배치도 위 화장실 마커 ────────────────────────────────────────────────────
+function DraggableRestroom({
+  marker, isEditMode, canvasRef, onMove, onRemove,
+}: {
+  marker: RestroomMarker
+  isEditMode: boolean
+  canvasRef: React.RefObject<HTMLDivElement | null>
+  onMove: (id: number, x: number, y: number) => void
+  onRemove: (id: number) => void
+}) {
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (!isEditMode) return
+    e.stopPropagation()
+    e.preventDefault()
+    const startX = e.clientX
+    const startY = e.clientY
+    const origX  = marker.posX
+    const origY  = marker.posY
+
+    const { w: rw, h: rh } = restroomSize(marker.type)
+    const onMove_ = (me: MouseEvent) => {
+      if (!canvasRef.current) return
+      const canvas = canvasRef.current
+      const newX = Math.max(0, Math.min(canvas.scrollWidth  - rw, origX + me.clientX - startX))
+      const newY = Math.max(0, Math.min(canvas.scrollHeight - rh, origY + me.clientY - startY))
+      onMove(marker.id, Math.round(newX / 20) * 20, Math.round(newY / 20) * 20)
+    }
+    const onUp = () => {
+      window.removeEventListener("mousemove", onMove_)
+      window.removeEventListener("mouseup", onUp)
+    }
+    window.addEventListener("mousemove", onMove_)
+    window.addEventListener("mouseup", onUp)
+  }
+
+  return (
+    <div
+      style={{ position: "absolute", left: marker.posX, top: marker.posY, userSelect: "none" }}
+      onMouseDown={handleMouseDown}
+      className={isEditMode ? "cursor-move" : ""}
+    >
+      <div className="relative">
+        <RestroomSvg type={marker.type} />
+        {isEditMode && (
+          <button
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={() => onRemove(marker.id)}
+            className="absolute -right-2 -top-2 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-white shadow hover:bg-red-600"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ─── 창문 SVG + 마커 ─────────────────────────────────────────────────────────
+const WINDOW_COLOR        = "#bae6fd"
+const WINDOW_BORDER_COLOR = "#38bdf8"
+const WINDOW_THICKNESS    = 5
+const WINDOW_DEFAULT_LEN  = 80
+const WINDOW_MIN_LEN      = 40
+const HANDLE_R            = 6
+
+// 버튼 미리보기용 작은 창문 아이콘
+function WindowSvg({ mini = false }: { mini?: boolean }) {
+  const w = mini ? 24 : WINDOW_DEFAULT_LEN
+  const h = mini ? 4  : WINDOW_THICKNESS
+  return (
+    <svg width={w} height={h} style={{ display: "block" }}>
+      <rect x={0} y={0} width={w} height={h} rx={1}
+        fill={WINDOW_COLOR} stroke={WINDOW_BORDER_COLOR} strokeWidth={1} />
+      <line x1={w/2} y1={0} x2={w/2} y2={h} stroke={WINDOW_BORDER_COLOR} strokeWidth={0.8} />
+    </svg>
+  )
+}
+
+function DraggableWindow({
+  marker, isEditMode, canvasRef, onMove, onUpdate, onRemove,
+}: {
+  marker: WindowMarker
+  isEditMode: boolean
+  canvasRef: React.RefObject<HTMLDivElement | null>
+  onMove: (id: number, x: number, y: number) => void
+  onUpdate: (id: number, angle: number, length: number) => void
+  onRemove: (id: number) => void
+}) {
+  const len      = marker.length ?? WINDOW_DEFAULT_LEN
+  const angleDeg = marker.angle  ?? 0
+  const angleRad = angleDeg * Math.PI / 180
+  // 끝점 핸들 위치 (canvas 좌표 기준)
+  const endX = marker.posX + len * Math.cos(angleRad)
+  const endY = marker.posY + len * Math.sin(angleRad)
+
+  // 이동 드래그
+  const handleMoveDown = (e: React.MouseEvent) => {
+    if (!isEditMode) return
+    e.stopPropagation(); e.preventDefault()
+    const sx = e.clientX, sy = e.clientY
+    const ox = marker.posX, oy = marker.posY
+    const onM = (me: MouseEvent) => {
+      if (!canvasRef.current) return
+      const nx = Math.max(0, ox + me.clientX - sx)
+      const ny = Math.max(0, oy + me.clientY - sy)
+      onMove(marker.id, Math.round(nx / 10) * 10, Math.round(ny / 10) * 10)
+    }
+    const onU = () => { window.removeEventListener("mousemove", onM); window.removeEventListener("mouseup", onU) }
+    window.addEventListener("mousemove", onM); window.addEventListener("mouseup", onU)
+  }
+
+  // 끝점 드래그 → 각도 + 길이 동시 조절
+  const handleEndDown = (e: React.MouseEvent) => {
+    e.stopPropagation(); e.preventDefault()
+    const onM = (me: MouseEvent) => {
+      if (!canvasRef.current) return
+      const rect = canvasRef.current.getBoundingClientRect()
+      const dx = me.clientX - rect.left - marker.posX
+      const dy = me.clientY - rect.top  - marker.posY
+      const newLen   = Math.max(WINDOW_MIN_LEN, Math.round(Math.sqrt(dx*dx + dy*dy) / 10) * 10)
+      const newAngle = Math.round(Math.atan2(dy, dx) * 180 / Math.PI)
+      onUpdate(marker.id, newAngle, newLen)
+    }
+    const onU = () => { window.removeEventListener("mousemove", onM); window.removeEventListener("mouseup", onU) }
+    window.addEventListener("mousemove", onM); window.addEventListener("mouseup", onU)
+  }
+
+  // 전체 SVG를 canvas 좌표계로 직접 그리기 위해 canvas 크기만큼 SVG를 덮는 대신,
+  // div를 posX/posY에 두고 transform으로 회전
+  return (
+    <div
+      style={{
+        position: "absolute",
+        left: marker.posX,
+        top: marker.posY - WINDOW_THICKNESS / 2,
+        width: len,
+        height: WINDOW_THICKNESS,
+        transformOrigin: `0 ${WINDOW_THICKNESS / 2}px`,
+        transform: `rotate(${angleDeg}deg)`,
+        userSelect: "none",
+      }}
+      onMouseDown={handleMoveDown}
+      className={isEditMode ? "cursor-move" : ""}
+    >
+      <svg width={len} height={WINDOW_THICKNESS} style={{ display: "block", overflow: "visible" }}>
+        <rect x={0} y={0} width={len} height={WINDOW_THICKNESS} rx={2}
+          fill={WINDOW_COLOR} stroke={WINDOW_BORDER_COLOR} strokeWidth={1} />
+        <line x1={len/2} y1={0} x2={len/2} y2={WINDOW_THICKNESS} stroke={WINDOW_BORDER_COLOR} strokeWidth={0.8} />
+        {/* 끝점 핸들: 길이 + 각도 조절 */}
+        {isEditMode && (
+          <circle cx={len} cy={WINDOW_THICKNESS / 2} r={HANDLE_R}
+            fill="#0ea5e9" stroke="#fff" strokeWidth={1.5}
+            style={{ cursor: "crosshair" }}
+            onMouseDown={(e) => { e.stopPropagation(); handleEndDown(e as unknown as React.MouseEvent) }}
+          />
+        )}
+        {/* 삭제 버튼 (SVG 밖 절대 위치로 처리) */}
+      </svg>
+      {isEditMode && (
+        <button
+          style={{ position: "absolute", top: -8, left: -8, transform: `rotate(${-angleDeg}deg)` }}
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={() => onRemove(marker.id)}
+          className="flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-white shadow hover:bg-red-600"
+        >
+          <X className="h-3 w-3" />
+        </button>
+      )}
+    </div>
+  )
 }
 
 // ─── SVG 의자 (편집 모드에서 드래그 가능) ────────────────────────────────────
@@ -297,6 +521,8 @@ interface DraggableTableProps {
   table: TableData
   onLogOpen: (table: TableData) => void
   isEditMode: boolean
+  isSelected: boolean
+  onSelect: (id: number) => void
   onResize: (id: number, w: number, h: number) => void
   onShapeChange: (id: number, shape: TableShape) => void
   onCapacityChange: (id: number, delta: number) => void
@@ -311,7 +537,7 @@ const SHAPES: { key: TableShape; label: string; icon: string }[] = [
 ]
 
 const DraggableTable = memo(function DraggableTable({
-  table, onLogOpen, isEditMode, onResize, onShapeChange, onCapacityChange, onRotationChange, onChairAngleChange,
+  table, onLogOpen, isEditMode, isSelected, onSelect, onResize, onShapeChange, onCapacityChange, onRotationChange, onChairAngleChange,
 }: DraggableTableProps) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: table.id,
@@ -435,6 +661,7 @@ const DraggableTable = memo(function DraggableTable({
       ref={setNodeRef} style={outerStyle}
       {...(isEditMode ? { ...attributes, ...listeners } : {})}
       className={`relative ${isEditMode ? "cursor-move" : "cursor-pointer"}`}
+      onClick={e => { if (isEditMode) { e.stopPropagation(); onSelect(table.id) } }}
     >
       {/* 청소 경고 배지 */}
       {isCleaning && (
@@ -519,7 +746,7 @@ const DraggableTable = memo(function DraggableTable({
       </svg>
 
       {/* ── 편집 모드 전용 UI (SVG 바깥, rotation 미적용) ─────────────────── */}
-      {isEditMode && (
+      {isEditMode && isSelected && (
         <>
           {/* 통합 툴바 (테이블 위) */}
           <div
@@ -618,6 +845,7 @@ export default function SeatManagementPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [cafeName, setCafeName] = useState("")
   const [isEditMode, setIsEditMode] = useState(false)
+  const [selectedTableId, setSelectedTableId] = useState<number | null>(null)
   const [activeId, setActiveId] = useState<number | null>(null)
   const canvasRef = useRef<HTMLDivElement>(null)
 
@@ -672,7 +900,9 @@ export default function SeatManagementPage() {
           awayTime: undefined,
           personCount: 0,
         })),
-      }))
+        restrooms: f.restrooms ?? [],
+          windows:   f.windows   ?? [],
+        }))
       setFloors(layoutOnly)
       setActiveFloorId(cached.activeFloorId)
       setNextFloorId(cached.nextFloorId)
@@ -695,6 +925,8 @@ export default function SeatManagementPage() {
             status: "available" as TableStatus,
             personCount: 0,
           })),
+          restrooms: f.restrooms ?? [],
+          windows:   f.windows   ?? [],
         })),
       }
       localStorage.setItem(FLOORS_STORAGE_KEY, JSON.stringify(layoutToSave))
@@ -764,16 +996,18 @@ export default function SeatManagementPage() {
           `http://34.64.58.23:8080/api/seats/floors?cafeName=${encodeURIComponent(cafeName)}`
         )
         if (floorsRes.ok) {
-          const data: Array<{ floorNumber: number; label: string; seats: TableData[] }> = await floorsRes.json()
+          const data: Array<{ floorNumber: number; label: string; seats: TableData[]; restrooms?: RestroomMarker[]; windows?: WindowMarker[] }> = await floorsRes.json()
           const serverHasRealData = data && data.some(f => (f.seats ?? []).length > 0)
 
           if (serverHasRealData) {
-            // 서버에 실제 데이터가 있으면 서버 기준으로 교체
+            // 서버에 실제 데이터가 있으면 서버 기준으로 교체 (overlay도 서버 우선)
             const merged = data.map(f => ({
               id: f.floorNumber,
               label: f.label,
               tables: f.seats ?? [],
               tableCount: (f.seats ?? []).length,
+              restrooms: f.restrooms ?? [],
+              windows:   (f.windows ?? []).map(w => ({ ...w, angle: w.angle ?? 0, length: w.length ?? 80 })),
             }))
             // 단, localStorage에만 있는 추가 층(빈 층)도 유지
             const serverIds = new Set(merged.map(f => f.id))
@@ -833,12 +1067,12 @@ export default function SeatManagementPage() {
 
         // 모든 API 실패 + localStorage도 비어있음 → 1층에만 기본 테이블 생성
         if (!storageData) {
-          setFloors([{ id: 1, label: "1층", tables: createInitialTables(), tableCount: 16 }])
+          setFloors([{ id: 1, label: "1층", tables: createInitialTables(), tableCount: 16, restrooms: [], windows: [] }])
         }
       } catch {
         // 네트워크 오류 → localStorage 복구 상태 유지
         if (!loadFloorsFromStorage()) {
-          setFloors([{ id: 1, label: "1층", tables: createInitialTables(), tableCount: 16 }])
+          setFloors([{ id: 1, label: "1층", tables: createInitialTables(), tableCount: 16, restrooms: [], windows: [] }])
         }
       } finally {
         setIsLoading(false)
@@ -951,6 +1185,8 @@ export default function SeatManagementPage() {
         floorNumber: f.id,
         label: f.label,
         seats: toLayoutOnly(f.tables),
+        restrooms: f.restrooms ?? [],
+        windows:   f.windows   ?? [],
       }))
 
       // 신규 floors/save 시도
@@ -1003,6 +1239,8 @@ export default function SeatManagementPage() {
       floorNumber: f.id,
       label: f.label,
       seats: toLayoutOnly(f.tables),
+      restrooms: f.restrooms ?? [],
+      windows:   f.windows   ?? [],
     }))
     try {
       const res = await fetch(
@@ -1172,6 +1410,70 @@ export default function SeatManagementPage() {
     }))
   }, [setTables])
 
+  // ── 화장실 마커 관리 ──────────────────────────────────────────────────────────
+  const nextRestroomIdRef = useRef(1)
+
+  const addRestroom = useCallback((type: RestroomType) => {
+    const id = nextRestroomIdRef.current++
+    setFloors(prev => prev.map(f =>
+      f.id === activeFloorId
+        ? { ...f, restrooms: [...(f.restrooms ?? []), { id, type, posX: 40, posY: 40 }] }
+        : f
+    ))
+  }, [activeFloorId])
+
+  const removeRestroom = useCallback((id: number) => {
+    setFloors(prev => prev.map(f =>
+      f.id === activeFloorId
+        ? { ...f, restrooms: (f.restrooms ?? []).filter(r => r.id !== id) }
+        : f
+    ))
+  }, [activeFloorId])
+
+  const moveRestroom = useCallback((id: number, x: number, y: number) => {
+    setFloors(prev => prev.map(f =>
+      f.id === activeFloorId
+        ? { ...f, restrooms: (f.restrooms ?? []).map(r => r.id === id ? { ...r, posX: x, posY: y } : r) }
+        : f
+    ))
+  }, [activeFloorId])
+
+  // ── 창문 마커 관리 ────────────────────────────────────────────────────────────
+  const nextWindowIdRef = useRef(1)
+
+  const addWindow = useCallback(() => {
+    const id = nextWindowIdRef.current++
+    setFloors(prev => prev.map(f =>
+      f.id === activeFloorId
+        ? { ...f, windows: [...(f.windows ?? []), { id, posX: 60, posY: 60, angle: 0, length: WINDOW_DEFAULT_LEN }] }
+        : f
+    ))
+  }, [activeFloorId])
+
+  const removeWindow = useCallback((id: number) => {
+    setFloors(prev => prev.map(f =>
+      f.id === activeFloorId
+        ? { ...f, windows: (f.windows ?? []).filter(w => w.id !== id) }
+        : f
+    ))
+  }, [activeFloorId])
+
+  const moveWindow = useCallback((id: number, x: number, y: number) => {
+    setFloors(prev => prev.map(f =>
+      f.id === activeFloorId
+        ? { ...f, windows: (f.windows ?? []).map(w => w.id === id ? { ...w, posX: x, posY: y } : w) }
+        : f
+    ))
+  }, [activeFloorId])
+
+  const updateWindow = useCallback((id: number, angle: number, length: number) => {
+    setFloors(prev => prev.map(f =>
+      f.id === activeFloorId
+        ? { ...f, windows: (f.windows ?? []).map(w => w.id === id ? { ...w, angle, length } : w) }
+        : f
+    ))
+  }, [activeFloorId])
+
   // ── 로그 fetch (테이블·날짜 변경 시 공통 사용) ─────────────────────────────
   const fetchAiLogs = useCallback(async (seatId: number, date: string) => {
     setAiLogs([])
@@ -1245,7 +1547,7 @@ export default function SeatManagementPage() {
                     className={isEditMode
                       ? "bg-emerald-600 text-white hover:bg-emerald-700"
                       : "border-gray-300 bg-white text-gray-600 hover:bg-gray-100 hover:text-gray-900"}
-                    onClick={() => setIsEditMode(!isEditMode)}>
+                    onClick={() => { setIsEditMode(prev => !prev); setSelectedTableId(null) }}>
                     {isEditMode
                       ? <><Unlock className="mr-2 h-4 w-4" />배치 편집 중</>
                       : <><Lock   className="mr-2 h-4 w-4" />배치 편집</>}
@@ -1341,23 +1643,44 @@ export default function SeatManagementPage() {
                           : "none",
                         backgroundSize: `${GRID_SIZE}px ${GRID_SIZE}px`,
                       }}
+                      onClick={() => { if (isEditMode) setSelectedTableId(null) }}
                     >
-                      {isEditMode && (
-                        <div className="absolute left-4 top-4 z-10 rounded-lg border border-emerald-200 bg-emerald-100 px-3 py-1.5 text-xs text-emerald-700">
-                          배치 편집 모드 ({currentFloor?.label}) — 테이블을 드래그하세요
-                        </div>
-                      )}
                       {tables.map(table => (
                         <DraggableTable
                           key={table.id}
                           table={table}
                           onLogOpen={handleLogOpen}
                           isEditMode={isEditMode}
+                          isSelected={selectedTableId === table.id}
+                          onSelect={setSelectedTableId}
                           onResize={handleResize}
                           onShapeChange={handleShapeChange}
                           onCapacityChange={handleCapacityChange}
                           onRotationChange={handleRotationChange}
                           onChairAngleChange={handleChairAngleChange}
+                        />
+                      ))}
+                      {/* 화장실 마커 */}
+                      {(currentFloor?.restrooms ?? []).map(r => (
+                        <DraggableRestroom
+                          key={r.id}
+                          marker={r}
+                          isEditMode={isEditMode}
+                          canvasRef={canvasRef}
+                          onMove={moveRestroom}
+                          onRemove={removeRestroom}
+                        />
+                      ))}
+                      {/* 창문 마커 */}
+                      {(currentFloor?.windows ?? []).map(w => (
+                        <DraggableWindow
+                          key={w.id}
+                          marker={w}
+                          isEditMode={isEditMode}
+                          canvasRef={canvasRef}
+                          onMove={moveWindow}
+                          onUpdate={updateWindow}
+                          onRemove={removeWindow}
                         />
                       ))}
                     </div>
@@ -1369,17 +1692,54 @@ export default function SeatManagementPage() {
               )}
 
               {/* 액션 버튼 */}
-              <div className="flex gap-3 pt-4">
+              <div className="flex flex-wrap items-center gap-3 pt-4">
                 <Button className="bg-emerald-600 text-white hover:bg-emerald-700" onClick={handleSaveChanges}>
                   <Save className="mr-2 h-4 w-4" />
                   배치 저장 ({currentFloor?.label})
                 </Button>
                 {isEditMode && (
-                  <Button variant="outline"
-                    className="border-gray-300 bg-white text-gray-600 hover:bg-gray-100"
-                    onClick={resetPositions}>
-                    <RotateCcw className="mr-2 h-4 w-4" />배치 초기화
-                  </Button>
+                  <>
+                    <Button variant="outline"
+                      className="border-gray-300 bg-white text-gray-600 hover:bg-gray-100"
+                      onClick={resetPositions}>
+                      <RotateCcw className="mr-2 h-4 w-4" />배치 초기화
+                    </Button>
+                    {/* 화장실 추가 버튼 */}
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-400">화장실 추가:</span>
+                      <button
+                        onClick={() => addRestroom("male")}
+                        className="flex items-center gap-1 rounded-lg border border-blue-200 bg-white px-2 py-1.5 text-xs font-medium text-blue-700 shadow-sm hover:bg-blue-50"
+                      >
+                        <RestroomMiniIcon type="male" />
+                        남자
+                      </button>
+                      <button
+                        onClick={() => addRestroom("female")}
+                        className="flex items-center gap-1 rounded-lg border border-red-200 bg-white px-2 py-1.5 text-xs font-medium text-red-700 shadow-sm hover:bg-red-50"
+                      >
+                        <RestroomMiniIcon type="female" />
+                        여자
+                      </button>
+                      <button
+                        onClick={() => addRestroom("both")}
+                        className="flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs font-medium text-gray-600 shadow-sm hover:bg-gray-50"
+                      >
+                        <RestroomMiniIcon type="both" />
+                        혼합
+                      </button>
+                    </div>
+                    {/* 창문 추가 버튼 */}
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => addWindow()}
+                        className="flex items-center gap-1.5 rounded-lg border border-sky-200 bg-white px-2 py-1.5 text-xs font-medium text-sky-600 shadow-sm hover:bg-sky-50"
+                      >
+                        <WindowSvg mini />
+                        창문 추가
+                      </button>
+                    </div>
+                  </>
                 )}
               </div>
             </div>

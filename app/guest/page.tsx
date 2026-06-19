@@ -15,8 +15,23 @@ const CHAIR_W      = 18
 const CHAIR_H      = 8
 
 // ─── 타입 ─────────────────────────────────────────────────────────────────────
-type TableStatus = "active" | "away" | "available" | "cleaning"
-type TableShape  = "rect" | "rounded" | "circle"
+type TableStatus   = "active" | "away" | "available" | "cleaning"
+type TableShape    = "rect" | "rounded" | "circle"
+type RestroomType  = "male" | "female" | "both"
+interface RestroomMarker {
+  id: number
+  type: RestroomType
+  posX: number
+  posY: number
+}
+
+interface WindowMarker {
+  id: number
+  posX: number
+  posY: number
+  angle?: number
+  length?: number
+}
 
 interface TableData {
   id: number
@@ -39,6 +54,8 @@ interface FloorData {
   id: number
   label: string
   tables: TableData[]
+  restrooms?: RestroomMarker[]
+  windows?: WindowMarker[]
 }
 
 // ─── 스타일 ───────────────────────────────────────────────────────────────────
@@ -203,6 +220,54 @@ function GuestTable({ table }: { table: TableData }) {
   )
 }
 
+// ─── 화장실 아이콘 (읽기 전용, 바 형태) ─────────────────────────────────────
+const R_LEN = 24
+const R_T   = 5
+const R_GAP = 3
+
+const R_COLORS: Record<string, string[]> = {
+  male:   ["#1D4ED8"],
+  female: ["#DC2626"],
+  both:   ["#1D4ED8", "#DC2626"],
+}
+
+function GuestRestroom({ marker }: { marker: RestroomMarker }) {
+  const colors = R_COLORS[marker.type] ?? ["#6b7280"]
+  const w = R_LEN * colors.length + R_GAP * (colors.length - 1)
+  return (
+    <div style={{ position: "absolute", left: marker.posX, top: marker.posY }}>
+      <svg width={w} height={R_T} style={{ display: "block" }}>
+        {colors.map((color, i) => (
+          <rect key={i} x={i * (R_LEN + R_GAP)} y={0} width={R_LEN} height={R_T} rx={2} fill={color} />
+        ))}
+      </svg>
+    </div>
+  )
+}
+
+// ─── 창문 (읽기 전용) ────────────────────────────────────────────────────────
+function GuestWindow({ marker }: { marker: WindowMarker }) {
+  const len = marker.length ?? 80
+  const T   = 5
+  const ang = marker.angle ?? 0
+  return (
+    <div style={{
+      position: "absolute",
+      left: marker.posX,
+      top: marker.posY - T / 2,
+      width: len,
+      height: T,
+      transformOrigin: `0 ${T / 2}px`,
+      transform: `rotate(${ang}deg)`,
+    }}>
+      <svg width={len} height={T} style={{ display: "block" }}>
+        <rect x={0} y={0} width={len} height={T} rx={2} fill="#bae6fd" stroke="#38bdf8" strokeWidth={1} />
+        <line x1={len/2} y1={0} x2={len/2} y2={T} stroke="#38bdf8" strokeWidth={0.8} />
+      </svg>
+    </div>
+  )
+}
+
 // ─── flat seats → floors 변환 ─────────────────────────────────────────────────
 function groupSeatsByFloor(seats: TableData[]): FloorData[] {
   const map = new Map<number, TableData[]>()
@@ -223,13 +288,22 @@ async function fetchFloorsFromServer(cafeName: string): Promise<FloorData[] | nu
       `http://34.64.58.23:8080/api/seats/floors?cafeName=${encodeURIComponent(cafeName)}`
     )
     if (res.ok) {
-      const data: Array<{ floorNumber: number; label: string; seats: TableData[] }> = await res.json()
+      const data: Array<{
+        floorNumber: number; label: string; seats: TableData[]
+        restrooms?: RestroomMarker[]; windows?: WindowMarker[]
+      }> = await res.json()
       if (data && data.some(f => (f.seats ?? []).length > 0)) {
-        return data.map(f => ({ id: f.floorNumber, label: f.label, tables: f.seats ?? [] }))
+        return data.map(f => ({
+          id: f.floorNumber,
+          label: f.label,
+          tables: f.seats ?? [],
+          restrooms: f.restrooms ?? [],
+          windows:   (f.windows ?? []).map(w => ({ ...w, angle: w.angle ?? 0, length: w.length ?? 80 })),
+        }))
       }
     }
   } catch {}
-  // 폴백: search API
+  // 폴백: search API (overlay 없음)
   try {
     const res = await fetch(
       `http://34.64.58.23:8080/api/seats/search?cafeName=${encodeURIComponent(cafeName)}`
@@ -270,7 +344,7 @@ export default function GuestPage() {
     const load = async () => {
       setIsLoading(true)
       try {
-        // 서버 데이터 우선 (shape/size/chairAngles 모두 포함)
+        // 서버 데이터 우선 (shape/size/chairAngles/restrooms/windows 모두 포함)
         const serverFloors = await fetchFloorsFromServer(storedCafeName)
         if (serverFloors && serverFloors.length > 0) {
           setFloors(serverFloors)
@@ -502,6 +576,12 @@ export default function GuestPage() {
           <div key={activeFloorId} className="relative" style={{ width: 1200, height: 900 }}>
             {tables.map((table) => (
               <GuestTable key={`${activeFloorId}-${table.id}`} table={table} />
+            ))}
+            {(currentFloor?.restrooms ?? []).map(r => (
+              <GuestRestroom key={r.id} marker={r} />
+            ))}
+            {(currentFloor?.windows ?? []).map(w => (
+              <GuestWindow key={w.id} marker={w} />
             ))}
           </div>
         </div>
