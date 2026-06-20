@@ -844,7 +844,6 @@ export default function SeatManagementPage() {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(true)
   const [cafeName, setCafeName] = useState("")
-  const [kakaoConnected, setKakaoConnected] = useState<boolean | null>(null)
   const [isEditMode, setIsEditMode] = useState(false)
   const [selectedTableId, setSelectedTableId] = useState<number | null>(null)
   const [activeId, setActiveId] = useState<number | null>(null)
@@ -980,28 +979,6 @@ export default function SeatManagementPage() {
     fetchOwnerInfo()
   }, [router])
 
-  // ── 카카오 연동 상태 확인 + 콜백 결과 처리 ─────────────────────────────────
-  useEffect(() => {
-    if (!cafeName) return
-    // URL 파라미터로 OAuth 결과 확인
-    const params = new URLSearchParams(window.location.search)
-    const kakaoResult = params.get("kakao")
-    if (kakaoResult) {
-      window.history.replaceState({}, "", window.location.pathname)
-    }
-    // 연동 상태 조회
-    fetch(`http://34.64.58.23:8080/api/auth/kakao/status?cafeName=${encodeURIComponent(cafeName)}`)
-      .then(r => r.json())
-      .then(d => setKakaoConnected(d.connected))
-      .catch(() => setKakaoConnected(false))
-  }, [cafeName])
-
-  const handleKakaoLogin = async () => {
-    if (!cafeName) return
-    const res = await fetch(`http://34.64.58.23:8080/api/auth/kakao/login-url?cafeName=${encodeURIComponent(cafeName)}`)
-    const data = await res.json()
-    window.location.href = data.url
-  }
 
   // ── [2] 카페 이름 확인 후 층별 좌석 로딩 ────────────────────────────────────
   useEffect(() => {
@@ -1552,26 +1529,6 @@ export default function SeatManagementPage() {
         />
 
         <div className="space-y-6 p-6">
-          {/* ── 카카오 알림 연동 ─────────────────────────────────────────────── */}
-          <div className="mb-4 flex items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm">
-            <div className="flex items-center gap-3">
-              <div className={`h-2.5 w-2.5 rounded-full ${kakaoConnected ? "bg-green-400" : "bg-gray-300"}`} />
-              <span className="text-sm font-medium text-gray-700">카카오톡 알림</span>
-              <span className="text-xs text-gray-400">
-                {kakaoConnected === null ? "확인 중..." : kakaoConnected ? "연동됨" : "미연동"}
-              </span>
-            </div>
-            <button
-              onClick={handleKakaoLogin}
-              className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-medium text-white shadow-sm transition-opacity hover:opacity-90"
-              style={{ backgroundColor: "#FEE500", color: "#000" }}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="#000">
-                <path d="M12 3C6.477 3 2 6.477 2 10.8c0 2.7 1.6 5.1 4 6.6l-1 3.6 4.2-2.8c.9.1 1.8.2 2.8.2 5.523 0 10-3.477 10-7.8S17.523 3 12 3z"/>
-              </svg>
-              {kakaoConnected ? "재연동" : "카카오 로그인"}
-            </button>
-          </div>
 
           <div className="grid gap-6 lg:grid-cols-3">
 

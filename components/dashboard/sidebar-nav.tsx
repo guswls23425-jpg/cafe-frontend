@@ -7,7 +7,8 @@ import {
   BarChart3,
   Settings,
   Coffee,
-  LogOut
+  LogOut,
+  Video,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -23,8 +24,13 @@ const navItems = [
     icon: BarChart3,
   },
   {
-    title: "시스템 설정",
+    title: "비디오",
     href: "/dashboard/settings",
+    icon: Video,
+  },
+  {
+    title: "시스템 설정",
+    href: "/dashboard/system-settings",
     icon: Settings,
   },
 ]
