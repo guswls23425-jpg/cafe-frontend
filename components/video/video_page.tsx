@@ -8,90 +8,128 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Slider } from "@/components/ui/slider"
 
+
 const BACKEND_URL = "http://34.64.58.23:8080"
 
-export function CameraFeedSimulator() {
+function CameraFeed({ sourceId, index }: { sourceId: string; index: number }) {
   const [streamUrl, setStreamUrl] = useState<string | null>(null)
   const [hasError, setHasError] = useState(false)
 
-  // 서버사이드 렌더링 방지: 클라이언트에서만 URL 설정
   useEffect(() => {
-    setStreamUrl(`${BACKEND_URL}/api/video/stream?t=${Date.now()}`)
-  }, [])
+    setStreamUrl(`${BACKEND_URL}/api/video/stream?sourceId=${encodeURIComponent(sourceId)}&t=${Date.now()}`)
+  }, [sourceId])
 
   const handleRetry = useCallback(() => {
     setHasError(false)
-    setStreamUrl(`${BACKEND_URL}/api/video/stream?t=${Date.now()}`)
+    setStreamUrl(`${BACKEND_URL}/api/video/stream?sourceId=${encodeURIComponent(sourceId)}&t=${Date.now()}`)
+  }, [sourceId])
+
+  return (
+    <div className="flex flex-col min-h-0">
+      <p className="mb-1 flex-none text-xs font-medium text-gray-500">CAM-{String(index + 1).padStart(2, "0")} · {sourceId}</p>
+      <div className="relative flex-1 min-h-0 w-full overflow-hidden rounded-lg border border-gray-300 bg-gray-900 flex items-center justify-center shadow-inner" style={{ aspectRatio: "16/9" }}>
+        {streamUrl && !hasError ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={streamUrl}
+            alt={`AI Live Stream ${sourceId}`}
+            className="absolute inset-0 w-full h-full object-cover"
+            onError={() => setHasError(true)}
+          />
+        ) : hasError ? (
+          <div className="flex flex-col items-center justify-center gap-3 text-gray-400">
+            <Camera className="h-8 w-8 opacity-30" />
+            <p className="text-xs">연결할 수 없습니다.</p>
+            <button
+              onClick={handleRetry}
+              className="flex items-center gap-1.5 rounded-md border border-gray-600 px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-700 transition-colors"
+            >
+              <RefreshCw className="h-3 w-3" />
+              재연결
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center gap-2 text-gray-500">
+            <Camera className="h-6 w-6 opacity-40" />
+            <p className="text-xs">연결 중...</p>
+          </div>
+        )}
+
+        <div className={`absolute right-2 top-2 flex items-center gap-1.5 rounded shadow-md px-2 py-1 z-20 ${hasError ? "bg-zinc-700" : "bg-red-500"}`}>
+          <div className={`h-1.5 w-1.5 rounded-full bg-white ${!hasError ? "animate-pulse" : ""}`} />
+          <span className="text-[10px] font-bold text-white tracking-wider">
+            {hasError ? "OFFLINE" : "LIVE"}
+          </span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export function CameraFeedSimulator() {
+  const [sources, setSources] = useState<string[]>([])
+  const [loading, setLoading] = useState(true)
+
+  const fetchSources = useCallback(async () => {
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/video/sources`)
+      const data: string[] = await res.json()
+      setSources(data.length > 0 ? data : [])
+    } catch {
+      setSources([])
+    } finally {
+      setLoading(false)
+    }
   }, [])
+
+  useEffect(() => {
+    fetchSources()
+    const interval = setInterval(fetchSources, 5000)
+    return () => clearInterval(interval)
+  }, [fetchSources])
 
   return (
     <Card className="border-gray-200 bg-white flex flex-col h-full min-h-0">
-      <CardHeader className='flex-none'>
-        <CardTitle className="flex items-center gap-2 text-gray-900">
-          <Camera className="h-5 w-5 text-emerald-500" />
-          매장 실시간 CCTV 피드
-        </CardTitle>
-        <CardDescription className="text-gray-500">
-          테이블 감지 영역(ROI) 오버레이 및 실시간 영상
-        </CardDescription>
+      <CardHeader className="flex-none">
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2 text-gray-900">
+              <Camera className="h-5 w-5 text-emerald-500" />
+              매장 실시간 CCTV 피드
+            </CardTitle>
+            <CardDescription className="text-gray-500">
+              AI 감지 영상 · 연결된 카메라 {loading ? "..." : sources.length}대
+            </CardDescription>
+          </div>
+          <button
+            onClick={fetchSources}
+            className="flex items-center gap-1.5 rounded-md border border-gray-200 px-3 py-1.5 text-xs text-gray-500 hover:bg-gray-100 transition-colors"
+          >
+            <RefreshCw className="h-3 w-3" />
+            새로고침
+          </button>
+        </div>
       </CardHeader>
 
       <CardContent className="flex-1 flex flex-col pb-6 min-h-0">
-
-        {/* 비디오 컨테이너 */}
-        <div className="relative flex-1 min-h-0 w-full aspect-video overflow-hidden rounded-lg border border-gray-300 bg-gray-900 flex items-center justify-center shadow-inner">
-
-          {/* 실제 카메라 피드 */}
-          {streamUrl && !hasError ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={streamUrl}
-              alt="AI Live Stream"
-              className="absolute inset-0 w-full h-full object-cover"
-              onError={() => setHasError(true)}
-            />
-          ) : hasError ? (
-            <div className="flex flex-col items-center justify-center gap-3 text-gray-400">
-              <Camera className="h-10 w-10 opacity-30" />
-              <p className="text-sm">비디오 스트림에 연결할 수 없습니다.</p>
-              <p className="text-xs">AI 서버 상태를 확인해 주세요.</p>
-              <button
-                onClick={handleRetry}
-                className="mt-1 flex items-center gap-1.5 rounded-md border border-gray-600 px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-700 transition-colors"
-              >
-                <RefreshCw className="h-3 w-3" />
-                재연결 시도
-              </button>
-            </div>
-          ) : (
-            <div className="flex flex-col items-center justify-center gap-2 text-gray-500">
-              <Camera className="h-8 w-8 opacity-40" />
-              <p className="text-sm">스트림 연결 중...</p>
-            </div>
-          )}
-
-          {/* ROI 오버레이 그리드 */}
-          <div className="absolute inset-0 z-10 pointer-events-none">
-            
+        {loading ? (
+          <div className="flex flex-1 items-center justify-center text-gray-400">
+            <Camera className="h-8 w-8 opacity-30 mr-2" />
+            <p className="text-sm">카메라 목록 불러오는 중...</p>
           </div>
-
-          {/* 라이브 상태 표시 (우측 상단) */}
-          <div className={`absolute right-3 top-3 flex items-center gap-1.5 rounded shadow-md px-2 py-1 z-20 ${hasError ? 'bg-zinc-700' : 'bg-red-500'}`}>
-            <div className={`h-1.5 w-1.5 rounded-full bg-white ${!hasError ? 'animate-pulse' : ''}`} />
-            <span className="text-[10px] font-bold text-white tracking-wider">
-              {hasError ? 'OFFLINE' : 'LIVE'}
-            </span>
+        ) : sources.length === 0 ? (
+          <div className="flex flex-1 flex-col items-center justify-center gap-3 text-gray-400">
+            <Camera className="h-10 w-10 opacity-30" />
+            <p className="text-sm">연결된 카메라가 없습니다.</p>
+            <p className="text-xs">AI 서버 상태를 확인해 주세요.</p>
           </div>
-
-          {/* 카메라 정보 메타데이터 (좌측 하단) */}
-          <div className="absolute bottom-3 left-3 rounded bg-black/70 backdrop-blur-sm px-2 py-1 text-[10px] text-zinc-300 z-20 border border-white/10">
-            CAM-01 | AI Vision | MJPEG
+        ) : (
+          <div className={`grid gap-4 flex-1 min-h-0 ${sources.length === 1 ? "grid-cols-1" : "grid-cols-2"}`}>
+            {sources.map((sourceId, i) => (
+              <CameraFeed key={sourceId} sourceId={sourceId} index={i} />
+            ))}
           </div>
-        </div>
-
-        <p className="mt-4 flex-none text-xs text-gray-500 text-center">
-          녹색 박스는 AI가 모니터링 중인 테이블 감지(ROI) 영역을 나타냅니다. 마우스로 클릭하여 세부 조정이 가능합니다.
-        </p>
+        )}
       </CardContent>
     </Card>
   )
