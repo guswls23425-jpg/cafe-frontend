@@ -1,5 +1,6 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import { TrendingUp, Lightbulb } from "lucide-react"
 import {
   ChartContainer,
@@ -175,37 +176,75 @@ export function ProblemTablesChart() {
   )
 }
 
-export function StayDurationChart() {
+const BACKEND = "http://34.64.58.23:8080"
+
+interface WeatherCongestionItem {
+  weatherMain: string
+  name: string
+  value: number
+  color: string
+  dayCount: number
+}
+
+export function StayDurationChart({ cafeName }: { cafeName?: string }) {
+  const [data, setData] = useState<WeatherCongestionItem[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const name = cafeName || (typeof window !== "undefined" ? localStorage.getItem("cafeName") : null)
+    if (!name) { setLoading(false); return }
+    fetch(`${BACKEND}/api/analytics/weather-congestion?cafeName=${encodeURIComponent(name)}&days=30`)
+      .then(r => r.json())
+      .then(d => { setData(Array.isArray(d) ? d : []); setLoading(false) })
+      .catch(() => setLoading(false))
+  }, [cafeName])
+
+  const chartConfig = Object.fromEntries(
+    data.map(d => [d.name, { label: d.name, color: d.color }])
+  )
+
   return (
     <Card className="border-gray-200 bg-white">
       <CardHeader>
-        <CardTitle className="text-gray-900">평균 체류 시간 분포</CardTitle>
+        <CardTitle className="text-gray-900">날씨별 카페 혼잡도</CardTitle>
         <CardDescription className="text-gray-500">
-          고객의 일반적인 좌석 이용 시간
+          최근 30일 날씨 유형별 평균 좌석 점유율 (%)
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <ChartContainer config={durationChartConfig} className="h-[280px] w-full">
-          <PieChart>
-            <ChartTooltip content={<ChartTooltipContent />} />
-            <Pie
-              data={stayDurationData}
-              cx="50%"
-              cy="50%"
-              innerRadius={60}
-              outerRadius={100}
-              paddingAngle={2}
-              dataKey="value"
-              nameKey="name"
-              strokeWidth={0}
-            >
-              {stayDurationData.map((entry, index) => (
-                <Cell key={`cell-${index}`} fill={entry.color} />
-              ))}
-            </Pie>
-            <ChartLegend content={<ChartLegendContent nameKey="name" />} />
-          </PieChart>
-        </ChartContainer>
+        {loading ? (
+          <div className="flex h-[280px] items-center justify-center text-sm text-gray-400">
+            데이터 불러오는 중…
+          </div>
+        ) : data.length === 0 ? (
+          <div className="flex h-[280px] items-center justify-center text-sm text-gray-400">
+            데이터가 없습니다
+          </div>
+        ) : (
+          <ChartContainer config={chartConfig} className="h-[280px] w-full">
+            <PieChart>
+              <ChartTooltip
+                content={<ChartTooltipContent formatter={(v, n) => [`${v}%`, n]} />}
+              />
+              <Pie
+                data={data}
+                cx="50%"
+                cy="50%"
+                innerRadius={60}
+                outerRadius={100}
+                paddingAngle={2}
+                dataKey="value"
+                nameKey="name"
+                strokeWidth={0}
+              >
+                {data.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={entry.color} />
+                ))}
+              </Pie>
+              <ChartLegend content={<ChartLegendContent nameKey="name" />} />
+            </PieChart>
+          </ChartContainer>
+        )}
       </CardContent>
     </Card>
   )
