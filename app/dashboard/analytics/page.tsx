@@ -152,6 +152,13 @@ interface FloorDto {
   floorName: string
 }
 
+interface FloorSummary {
+  floorNumber: number
+  floorName: string
+  occupancy: number
+  seatCount: number
+}
+
 export default function AnalyticsPage() {
   const today = new Date().toISOString().slice(0, 10)
   const [selectedDate, setSelectedDate] = useState(today)
@@ -160,6 +167,7 @@ export default function AnalyticsPage() {
   const [cafeName, setCafeName] = useState("")
   const [floors, setFloors] = useState<FloorDto[]>([])
   const [selectedFloor, setSelectedFloor] = useState(1)
+  const [floorSummary, setFloorSummary] = useState<FloorSummary[]>([])
 
   useEffect(() => {
     const stored = localStorage.getItem("cafeName")
@@ -194,6 +202,14 @@ export default function AnalyticsPage() {
       .then(d => setSeats(Array.isArray(d) ? d : []))
       .catch(() => setSeats([]))
   }, [selectedDate, cafeName, selectedFloor])
+
+  useEffect(() => {
+    if (!selectedDate || !cafeName) return
+    fetch(`${BACKEND}/api/analytics/floor-summary?cafeName=${encodeURIComponent(cafeName)}&date=${selectedDate}`)
+      .then(r => r.json())
+      .then(d => setFloorSummary(Array.isArray(d) ? d : []))
+      .catch(() => setFloorSummary([]))
+  }, [selectedDate, cafeName])
 
   return (
     <div className="flex min-h-screen bg-gray-50">
@@ -245,6 +261,30 @@ export default function AnalyticsPage() {
               </div>
             </CardHeader>
             <CardContent>
+              {/* 층별 점유율 요약 뱃지 */}
+              {floorSummary.length > 0 && (
+                <div className="mb-4 flex flex-wrap gap-2">
+                  {floorSummary.map(f => {
+                    const colors = f.occupancy === 0
+                      ? "bg-gray-100 text-gray-400 border-gray-200"
+                      : f.occupancy < 30
+                      ? "bg-green-50 text-green-700 border-green-200"
+                      : f.occupancy < 60
+                      ? "bg-yellow-50 text-yellow-700 border-yellow-200"
+                      : "bg-red-50 text-red-700 border-red-200"
+                    return (
+                      <button
+                        key={f.floorNumber}
+                        onClick={() => setSelectedFloor(f.floorNumber)}
+                        className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-all ${colors} ${selectedFloor === f.floorNumber ? "ring-2 ring-offset-1 ring-emerald-400" : ""}`}
+                      >
+                        <span>{f.floorName}</span>
+                        <span className="font-bold">{f.occupancy > 0 ? `${f.occupancy}%` : "-"}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
               <div className="grid items-stretch gap-4 lg:grid-cols-4">
                 {/* 날씨 카드 */}
                 <div className="flex flex-col lg:col-span-1">
