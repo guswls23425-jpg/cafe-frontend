@@ -244,11 +244,13 @@ export default function AnalyticsPage() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="grid gap-4 lg:grid-cols-4">
+              <div className="grid items-stretch gap-4 lg:grid-cols-4">
                 {/* 날씨 카드 */}
-                <div className="lg:col-span-1">
+                <div className="flex flex-col lg:col-span-1">
                   <p className="mb-2 text-xs font-medium text-gray-500">{selectedDate} 날씨</p>
-                  <WeatherCard weather={weather} />
+                  <div className="flex-1">
+                    <WeatherCard weather={weather} />
+                  </div>
                 </div>
                 {/* 좌석 배치도 */}
                 <div className="lg:col-span-3">
