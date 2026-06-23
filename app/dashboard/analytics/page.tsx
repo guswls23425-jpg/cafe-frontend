@@ -146,17 +146,37 @@ function WeatherCard({ weather }: { weather: WeatherLog | null }) {
   )
 }
 
+interface FloorDto {
+  floorNumber: number
+  floorName: string
+}
+
 export default function AnalyticsPage() {
   const today = new Date().toISOString().slice(0, 10)
   const [selectedDate, setSelectedDate] = useState(today)
   const [weather, setWeather] = useState<WeatherLog | null>(null)
   const [seats, setSeats] = useState<SeatOccupancy[]>([])
   const [cafeName, setCafeName] = useState("")
+  const [floors, setFloors] = useState<FloorDto[]>([])
+  const [selectedFloor, setSelectedFloor] = useState(1)
 
   useEffect(() => {
     const stored = localStorage.getItem("cafeName")
     if (stored) setCafeName(stored)
   }, [])
+
+  useEffect(() => {
+    if (!cafeName) return
+    fetch(`${BACKEND}/api/seats/floors?cafeName=${encodeURIComponent(cafeName)}`)
+      .then(r => r.json())
+      .then(d => {
+        if (Array.isArray(d) && d.length > 0) {
+          setFloors(d)
+          setSelectedFloor(d[0].floorNumber)
+        }
+      })
+      .catch(() => {})
+  }, [cafeName])
 
   useEffect(() => {
     if (!selectedDate) return
@@ -168,11 +188,11 @@ export default function AnalyticsPage() {
 
   useEffect(() => {
     if (!selectedDate || !cafeName) return
-    fetch(`${BACKEND}/api/analytics/daily-occupancy?cafeName=${encodeURIComponent(cafeName)}&date=${selectedDate}&floorId=1`)
+    fetch(`${BACKEND}/api/analytics/daily-occupancy?cafeName=${encodeURIComponent(cafeName)}&date=${selectedDate}&floorId=${selectedFloor}`)
       .then(r => r.json())
       .then(d => setSeats(Array.isArray(d) ? d : []))
       .catch(() => setSeats([]))
-  }, [selectedDate, cafeName])
+  }, [selectedDate, cafeName, selectedFloor])
 
   return (
     <div className="flex min-h-screen bg-gray-50">
@@ -185,18 +205,39 @@ export default function AnalyticsPage() {
           {/* ── 날짜별 좌석 배치도 + 날씨 ──────────────────────────── */}
           <Card className="border-gray-200 bg-white">
             <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-3">
                 <CardTitle className="flex items-center gap-2 text-gray-900">
                   <CalendarDays className="h-5 w-5 text-emerald-500" />
                   날짜별 좌석 점유율
                 </CardTitle>
-                <input
-                  type="date"
-                  value={selectedDate}
-                  max={today}
-                  onChange={e => setSelectedDate(e.target.value)}
-                  className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-400"
-                />
+                <div className="flex items-center gap-2">
+                  {/* 층 선택 탭 */}
+                  {floors.length > 1 && (
+                    <div className="flex overflow-hidden rounded-lg border border-gray-300">
+                      {floors.map(f => (
+                        <button
+                          key={f.floorNumber}
+                          onClick={() => setSelectedFloor(f.floorNumber)}
+                          className={`px-3 py-1.5 text-sm font-medium transition-colors ${
+                            selectedFloor === f.floorNumber
+                              ? "bg-emerald-500 text-white"
+                              : "bg-white text-gray-600 hover:bg-gray-50"
+                          }`}
+                        >
+                          {f.floorName}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {/* 날짜 선택 */}
+                  <input
+                    type="date"
+                    value={selectedDate}
+                    max={today}
+                    onChange={e => setSelectedDate(e.target.value)}
+                    className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                  />
+                </div>
               </div>
             </CardHeader>
             <CardContent>
