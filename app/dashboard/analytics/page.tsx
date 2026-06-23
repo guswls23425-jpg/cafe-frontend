@@ -261,28 +261,45 @@ export default function AnalyticsPage() {
               </div>
             </CardHeader>
             <CardContent>
-              {/* 층별 점유율 요약 뱃지 */}
+              {/* 층별 점유율 비교 테이블 */}
               {floorSummary.length > 0 && (
-                <div className="mb-4 flex flex-wrap gap-2">
-                  {floorSummary.map(f => {
-                    const colors = f.occupancy === 0
-                      ? "bg-gray-100 text-gray-400 border-gray-200"
-                      : f.occupancy < 30
-                      ? "bg-green-50 text-green-700 border-green-200"
-                      : f.occupancy < 60
-                      ? "bg-yellow-50 text-yellow-700 border-yellow-200"
-                      : "bg-red-50 text-red-700 border-red-200"
-                    return (
-                      <button
-                        key={f.floorNumber}
-                        onClick={() => setSelectedFloor(f.floorNumber)}
-                        className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-all ${colors} ${selectedFloor === f.floorNumber ? "ring-2 ring-offset-1 ring-emerald-400" : ""}`}
-                      >
-                        <span>{f.floorName}</span>
-                        <span className="font-bold">{f.occupancy > 0 ? `${f.occupancy}%` : "-"}</span>
-                      </button>
-                    )
-                  })}
+                <div className="mb-4 overflow-hidden rounded-lg border border-gray-200">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-gray-50 text-xs text-gray-500">
+                        <th className="px-3 py-2 text-left font-medium">층</th>
+                        <th className="px-3 py-2 text-center font-medium">좌석 수</th>
+                        <th className="px-3 py-2 text-center font-medium">점유율</th>
+                        <th className="px-3 py-2 text-left font-medium w-40">비율</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {floorSummary.map(f => {
+                        const barColor = f.occupancy === 0 ? "#e5e7eb"
+                          : f.occupancy < 30 ? "#22c55e"
+                          : f.occupancy < 60 ? "#f59e0b"
+                          : "#ef4444"
+                        return (
+                          <tr
+                            key={f.floorNumber}
+                            onClick={() => setSelectedFloor(f.floorNumber)}
+                            className={`cursor-pointer transition-colors hover:bg-gray-50 ${selectedFloor === f.floorNumber ? "bg-emerald-50" : ""}`}
+                          >
+                            <td className="px-3 py-2 font-medium text-gray-700">{f.floorName}</td>
+                            <td className="px-3 py-2 text-center text-gray-500">{f.seatCount}석</td>
+                            <td className="px-3 py-2 text-center font-bold" style={{ color: barColor }}>
+                              {f.occupancy > 0 ? `${f.occupancy}%` : "-"}
+                            </td>
+                            <td className="px-3 py-2">
+                              <div className="h-2 w-full overflow-hidden rounded-full bg-gray-100">
+                                <div className="h-full rounded-full transition-all" style={{ width: `${f.occupancy}%`, backgroundColor: barColor }} />
+                              </div>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
                 </div>
               )}
               <div className="grid items-stretch gap-4 lg:grid-cols-4">
