@@ -7,6 +7,7 @@ import {
   WeeklyTrendsChart,
   ProblemTablesChart,
   StayDurationChart,
+  HourlyChart,
   AIInsightCard,
 } from "@/components/analytics/analytics-charts"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -266,13 +267,17 @@ export default function AnalyticsPage() {
             </CardContent>
           </Card>
 
-          {/* ── 기존 차트 영역 ──────────────────────────────────────── */}
-          <WeeklyTrendsChart />
+          {/* ── 날짜별 이용률 추이 ────────────────────────────────── */}
+          <WeeklyTrendsChart cafeName={cafeName} />
 
+          {/* ── 요일별 점유율 + 날씨별 혼잡도 ───────────────────── */}
           <div className="grid gap-6 lg:grid-cols-2">
-            <ProblemTablesChart />
-            <StayDurationChart />
+            <ProblemTablesChart cafeName={cafeName} />
+            <StayDurationChart cafeName={cafeName} />
           </div>
+
+          {/* ── 시간대별 혼잡도 ──────────────────────────────────── */}
+          <HourlyChart cafeName={cafeName} />
 
           <AIInsightCard />
         </div>
