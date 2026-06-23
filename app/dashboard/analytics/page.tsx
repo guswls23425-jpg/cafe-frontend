@@ -213,6 +213,8 @@ export default function AnalyticsPage() {
                 <div className="flex items-center gap-2">
                   {/* 층 선택 탭 */}
                   {floors.length > 1 && (
+                    <div className="flex items-center gap-2">
+                    <span className="text-sm text-gray-500">층수선택</span>
                     <div className="flex overflow-hidden rounded-lg border border-gray-300">
                       {floors.map(f => (
                         <button
@@ -227,6 +229,7 @@ export default function AnalyticsPage() {
                           {f.floorName}
                         </button>
                       ))}
+                    </div>
                     </div>
                   )}
                   {/* 날짜 선택 */}
