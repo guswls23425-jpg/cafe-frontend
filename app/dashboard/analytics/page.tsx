@@ -1,3 +1,6 @@
+"use client"
+
+import { useState, useEffect } from "react"
 import { SidebarNav } from "@/components/dashboard/sidebar-nav"
 import { HeaderStats } from "@/components/dashboard/header-stats"
 import {
@@ -6,8 +9,171 @@ import {
   StayDurationChart,
   AIInsightCard,
 } from "@/components/analytics/analytics-charts"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Cloud, Droplets, Wind, Thermometer, CalendarDays } from "lucide-react"
+
+const BACKEND = "http://34.64.58.23:8080"
+
+interface WeatherLog {
+  temp: number
+  feelsLike: number
+  tempMin: number
+  tempMax: number
+  humidity: number
+  windSpeed: number
+  description: string
+  icon: string
+  weatherMain: string
+}
+
+interface SeatOccupancy {
+  seatId: number
+  name: string
+  posX: number
+  posY: number
+  tableWidth: number | null
+  tableHeight: number | null
+  shape: string | null
+  rotation: number | null
+  occupancy: number
+  totalCount: number
+}
+
+const TABLE_W = 120
+const TABLE_H = 80
+const CANVAS_W = 700
+const CANVAS_H = 400
+
+function occupancyColor(pct: number) {
+  if (pct === 0) return { bg: "#f3f4f6", text: "#9ca3af", border: "#e5e7eb" }
+  if (pct < 30) return { bg: "#dcfce7", text: "#16a34a", border: "#86efac" }
+  if (pct < 60) return { bg: "#fef9c3", text: "#ca8a04", border: "#fde047" }
+  return { bg: "#fee2e2", text: "#dc2626", border: "#fca5a5" }
+}
+
+function FloorPlanView({ seats }: { seats: SeatOccupancy[] }) {
+  if (seats.length === 0) {
+    return (
+      <div className="flex h-48 items-center justify-center text-gray-400 text-sm">
+        해당 날짜의 좌석 데이터가 없습니다.
+      </div>
+    )
+  }
+  return (
+    <div className="relative overflow-auto rounded-lg border border-gray-200 bg-gray-50 p-2">
+      <div style={{ position: "relative", width: CANVAS_W, height: CANVAS_H, minWidth: CANVAS_W }}>
+        {seats.map((seat) => {
+          const w = seat.tableWidth ?? TABLE_W
+          const h = seat.tableHeight ?? TABLE_H
+          const x = seat.posX ?? 0
+          const y = seat.posY ?? 0
+          const rot = seat.rotation ?? 0
+          const colors = occupancyColor(seat.occupancy)
+          return (
+            <div
+              key={seat.seatId}
+              style={{
+                position: "absolute",
+                left: x,
+                top: y,
+                width: w,
+                height: h,
+                transform: `rotate(${rot}deg)`,
+                transformOrigin: "center center",
+                backgroundColor: colors.bg,
+                border: `2px solid ${colors.border}`,
+                borderRadius: seat.shape === "circle" ? "50%" : seat.shape === "rounded" ? 12 : 6,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+              }}
+            >
+              <span style={{ fontSize: 11, color: "#6b7280", fontWeight: 500 }}>{seat.name}</span>
+              <span style={{ fontSize: 15, fontWeight: 700, color: colors.text }}>
+                {seat.totalCount === 0 ? "-" : `${seat.occupancy}%`}
+              </span>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function WeatherCard({ weather }: { weather: WeatherLog | null }) {
+  if (!weather) {
+    return (
+      <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-gray-300 bg-gray-50 text-sm text-gray-400">
+        날씨 데이터 없음
+      </div>
+    )
+  }
+  return (
+    <div className="flex h-full flex-col justify-center gap-3 rounded-xl border border-blue-100 bg-blue-50 px-5 py-4">
+      <div className="flex items-center gap-3">
+        <img
+          src={`https://openweathermap.org/img/wn/${weather.icon}@2x.png`}
+          alt={weather.description}
+          width={56}
+          height={56}
+        />
+        <div>
+          <p className="text-2xl font-bold text-gray-800">{weather.temp?.toFixed(1)}°C</p>
+          <p className="text-sm text-gray-500 capitalize">{weather.description}</p>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">
+        <div className="flex items-center gap-1">
+          <Thermometer className="h-3.5 w-3.5 text-orange-400" />
+          체감 {weather.feelsLike?.toFixed(1)}°C
+        </div>
+        <div className="flex items-center gap-1">
+          <Droplets className="h-3.5 w-3.5 text-blue-400" />
+          습도 {weather.humidity}%
+        </div>
+        <div className="flex items-center gap-1">
+          <Wind className="h-3.5 w-3.5 text-gray-400" />
+          풍속 {weather.windSpeed?.toFixed(1)}m/s
+        </div>
+        <div className="flex items-center gap-1">
+          <Cloud className="h-3.5 w-3.5 text-gray-400" />
+          최저 {weather.tempMin?.toFixed(1)} / 최고 {weather.tempMax?.toFixed(1)}°C
+        </div>
+      </div>
+    </div>
+  )
+}
 
 export default function AnalyticsPage() {
+  const today = new Date().toISOString().slice(0, 10)
+  const [selectedDate, setSelectedDate] = useState(today)
+  const [weather, setWeather] = useState<WeatherLog | null>(null)
+  const [seats, setSeats] = useState<SeatOccupancy[]>([])
+  const [cafeName, setCafeName] = useState("")
+
+  useEffect(() => {
+    const stored = localStorage.getItem("cafeName")
+    if (stored) setCafeName(stored)
+  }, [])
+
+  useEffect(() => {
+    if (!selectedDate) return
+    fetch(`${BACKEND}/api/weather/daily?date=${selectedDate}`)
+      .then(r => r.status === 204 ? null : r.json())
+      .then(d => setWeather(d))
+      .catch(() => setWeather(null))
+  }, [selectedDate])
+
+  useEffect(() => {
+    if (!selectedDate || !cafeName) return
+    fetch(`${BACKEND}/api/analytics/daily-occupancy?cafeName=${encodeURIComponent(cafeName)}&date=${selectedDate}&floorId=1`)
+      .then(r => r.json())
+      .then(d => setSeats(Array.isArray(d) ? d : []))
+      .catch(() => setSeats([]))
+  }, [selectedDate, cafeName])
+
   return (
     <div className="flex min-h-screen bg-gray-50">
       <SidebarNav />
@@ -15,17 +181,53 @@ export default function AnalyticsPage() {
         <HeaderStats />
         <div className="space-y-6 p-6">
           <h2 className="text-xl font-semibold text-gray-900">분석 및 인사이트</h2>
-          
-          {/* 주간 추이 차트 */}
+
+          {/* ── 날짜별 좌석 배치도 + 날씨 ──────────────────────────── */}
+          <Card className="border-gray-200 bg-white">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2 text-gray-900">
+                  <CalendarDays className="h-5 w-5 text-emerald-500" />
+                  날짜별 좌석 점유율
+                </CardTitle>
+                <input
+                  type="date"
+                  value={selectedDate}
+                  max={today}
+                  onChange={e => setSelectedDate(e.target.value)}
+                  className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-4 lg:grid-cols-4">
+                {/* 날씨 카드 */}
+                <div className="lg:col-span-1">
+                  <p className="mb-2 text-xs font-medium text-gray-500">{selectedDate} 날씨</p>
+                  <WeatherCard weather={weather} />
+                </div>
+                {/* 좌석 배치도 */}
+                <div className="lg:col-span-3">
+                  <div className="mb-2 flex items-center gap-4 text-xs text-gray-500">
+                    <span className="flex items-center gap-1"><span className="inline-block h-3 w-3 rounded bg-gray-200" /> 데이터 없음</span>
+                    <span className="flex items-center gap-1"><span className="inline-block h-3 w-3 rounded bg-green-200" /> 0~30%</span>
+                    <span className="flex items-center gap-1"><span className="inline-block h-3 w-3 rounded bg-yellow-200" /> 30~60%</span>
+                    <span className="flex items-center gap-1"><span className="inline-block h-3 w-3 rounded bg-red-200" /> 60%+</span>
+                  </div>
+                  <FloorPlanView seats={seats} />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* ── 기존 차트 영역 ──────────────────────────────────────── */}
           <WeeklyTrendsChart />
 
-          {/* 2열 레이아웃 */}
           <div className="grid gap-6 lg:grid-cols-2">
             <ProblemTablesChart />
             <StayDurationChart />
           </div>
 
-          {/* AI 인사이트 섹션 */}
           <AIInsightCard />
         </div>
       </main>
