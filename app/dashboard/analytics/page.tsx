@@ -8,6 +8,7 @@ import {
   ProblemTablesChart,
   StayDurationChart,
   HourlyChart,
+  WeatherRelationChart,
   AIInsightCard,
 } from "@/components/analytics/analytics-charts"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -335,6 +336,9 @@ export default function AnalyticsPage() {
 
           {/* ── 시간대별 혼잡도 ──────────────────────────────────── */}
           <HourlyChart cafeName={cafeName} />
+
+          {/* ── 날씨 × 점유율 관계도 ─────────────────────────────── */}
+          <WeatherRelationChart cafeName={cafeName} />
 
           <AIInsightCard />
         </div>

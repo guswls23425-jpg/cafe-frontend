@@ -20,6 +20,11 @@ import {
   PieChart,
   Pie,
   Cell,
+  ScatterChart,
+  Scatter,
+  ZAxis,
+  Tooltip,
+  ResponsiveContainer,
 } from "recharts"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 
@@ -237,6 +242,108 @@ export function StayDurationChart({ cafeName: propName }: { cafeName?: string })
               <ChartLegend content={<ChartLegendContent nameKey="name" />} />
             </PieChart>
           </ChartContainer>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+// ── 날씨-점유율 관계도 ─────────────────────────────────────────────────────
+interface WeatherRelationItem {
+  date: string
+  temp: number
+  occupancy: number
+  weather: string
+  color: string
+  humidity: number
+}
+
+const WEATHER_GROUPS = ["맑음", "흐림", "비", "눈", "황사"] as const
+const WEATHER_COLORS: Record<string, string> = {
+  맑음: "#f59e0b", 흐림: "#94a3b8", 비: "#3b82f6", 눈: "#bae6fd", 황사: "#d97706",
+}
+
+function WeatherTooltip({ active, payload }: any) {
+  if (!active || !payload?.length) return null
+  const d = payload[0]?.payload as WeatherRelationItem
+  return (
+    <div className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs shadow-md">
+      <p className="font-semibold text-gray-700">{d.date}</p>
+      <p style={{ color: d.color }}>{d.weather}</p>
+      <p className="text-gray-600">기온 {d.temp}°C</p>
+      <p className="text-gray-600">습도 {d.humidity}%</p>
+      <p className="font-bold text-gray-800">점유율 {d.occupancy}%</p>
+    </div>
+  )
+}
+
+export function WeatherRelationChart({ cafeName: propName }: { cafeName?: string }) {
+  const stored = useCafeName()
+  const cafeName = propName || stored
+  const [data, setData] = useState<WeatherRelationItem[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    if (!cafeName) return
+    fetch(`${BACKEND}/api/analytics/weather-relation?cafeName=${encodeURIComponent(cafeName)}&days=60`)
+      .then(r => r.json())
+      .then(d => { setData(Array.isArray(d) ? d : []); setLoading(false) })
+      .catch(() => setLoading(false))
+  }, [cafeName])
+
+  // 날씨 유형별로 그룹핑
+  const grouped = WEATHER_GROUPS.map(w => ({
+    name: w,
+    color: WEATHER_COLORS[w],
+    points: data.filter(d => d.weather === w),
+  })).filter(g => g.points.length > 0)
+
+  return (
+    <Card className="border-gray-200 bg-white">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-gray-900">
+          <TrendingUp className="h-5 w-5 text-purple-500" />
+          날씨 × 점유율 관계도
+        </CardTitle>
+        <CardDescription className="text-gray-500">
+          최근 60일 — X축 기온(°C), Y축 점유율(%), 색상 날씨 유형
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {loading ? <LoadingState height={320} /> : data.length === 0 ? <EmptyState height={320} /> : (
+          <>
+            {/* 범례 */}
+            <div className="mb-3 flex flex-wrap gap-3">
+              {grouped.map(g => (
+                <span key={g.name} className="flex items-center gap-1.5 text-xs text-gray-600">
+                  <span className="inline-block h-3 w-3 rounded-full" style={{ backgroundColor: g.color }} />
+                  {g.name} ({g.points.length}일)
+                </span>
+              ))}
+            </div>
+            <ResponsiveContainer width="100%" height={320}>
+              <ScatterChart margin={{ top: 10, right: 20, bottom: 20, left: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <XAxis
+                  type="number" dataKey="temp" name="기온" unit="°C"
+                  tick={{ fill: "#6b7280", fontSize: 11 }}
+                  axisLine={{ stroke: "#e5e7eb" }} tickLine={false}
+                  label={{ value: "기온 (°C)", position: "insideBottom", offset: -10, fill: "#9ca3af", fontSize: 11 }}
+                />
+                <YAxis
+                  type="number" dataKey="occupancy" name="점유율" unit="%" domain={[0, 100]}
+                  tick={{ fill: "#6b7280", fontSize: 11 }}
+                  axisLine={{ stroke: "#e5e7eb" }} tickLine={false}
+                  label={{ value: "점유율 (%)", angle: -90, position: "insideLeft", fill: "#9ca3af", fontSize: 11 }}
+                />
+                <ZAxis range={[60, 60]} />
+                <Tooltip content={<WeatherTooltip />} />
+                {grouped.map(g => (
+                  <Scatter key={g.name} name={g.name} data={g.points} fill={g.color} fillOpacity={0.75} />
+                ))}
+              </ScatterChart>
+            </ResponsiveContainer>
+          </>
         )}
       </CardContent>
     </Card>
