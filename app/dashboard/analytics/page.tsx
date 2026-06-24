@@ -265,10 +265,13 @@ export default function AnalyticsPage() {
   // 섹션 2 — 선택 날짜 날씨 + 층별 요약 + 좌석 배치도
   useEffect(() => {
     if (!selectedDate) return
-    fetch(`${BACKEND}/api/weather/daily?date=${selectedDate}`)
+    const url = selectedDate === today
+      ? `${BACKEND}/api/weather/today`
+      : `${BACKEND}/api/weather/daily?date=${selectedDate}`
+    fetch(url)
       .then(r => r.status === 204 ? null : r.json())
       .then(d => setDetailWeather(d)).catch(() => setDetailWeather(null))
-  }, [selectedDate])
+  }, [selectedDate, today])
 
   useEffect(() => {
     if (!selectedDate || !cafeName) return
