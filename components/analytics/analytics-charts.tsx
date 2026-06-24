@@ -6,8 +6,6 @@ import {
   ChartContainer,
   ChartTooltip,
   ChartTooltipContent,
-  ChartLegend,
-  ChartLegendContent,
 } from "@/components/ui/chart"
 import {
   AreaChart,
@@ -17,9 +15,6 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
-  PieChart,
-  Pie,
-  Cell,
   ScatterChart,
   Scatter,
   ZAxis,
@@ -199,48 +194,76 @@ export function HourlyChart({ cafeName: propName }: { cafeName?: string }) {
   )
 }
 
-// ── 날씨별 카페 혼잡도 ────────────────────────────────────────────────────
-interface WeatherCongestionItem {
-  name: string
-  value: number
-  color: string
-  dayCount: number
+// ── 테이블별 평균 체류 시간 ───────────────────────────────────────────────
+interface StayDurationItem {
+  seatName: string
+  floorName: string
+  avgMinutes: number
+  sessionCount: number
+  maxMinutes: number
+}
+
+const stayConfig = {
+  avgMinutes: { label: "평균 체류(분)", color: "#8b5cf6" },
 }
 
 export function StayDurationChart({ cafeName: propName }: { cafeName?: string }) {
   const stored = useCafeName()
   const cafeName = propName || stored
-  const [data, setData] = useState<WeatherCongestionItem[]>([])
+  const [data, setData] = useState<StayDurationItem[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     if (!cafeName) return
-    fetch(`${BACKEND}/api/analytics/weather-congestion?cafeName=${encodeURIComponent(cafeName)}&days=30`)
+    fetch(`${BACKEND}/api/analytics/stay-duration?cafeName=${encodeURIComponent(cafeName)}&days=30`)
       .then(r => r.json())
       .then(d => { setData(Array.isArray(d) ? d : []); setLoading(false) })
       .catch(() => setLoading(false))
   }, [cafeName])
 
-  const chartConfig = Object.fromEntries(data.map(d => [d.name, { label: d.name, color: d.color }]))
+  const formatted = data.map(d => ({
+    ...d,
+    label: `${d.floorName} ${d.seatName}`,
+  }))
 
   return (
     <Card className="border-gray-200 bg-white">
       <CardHeader>
-        <CardTitle className="text-gray-900">날씨별 카페 혼잡도</CardTitle>
-        <CardDescription className="text-gray-500">최근 30일 날씨 유형별 평균 좌석 점유율 (%)</CardDescription>
+        <CardTitle className="flex items-center gap-2 text-gray-900">
+          <Clock className="h-5 w-5 text-purple-500" />
+          테이블별 평균 체류 시간
+        </CardTitle>
+        <CardDescription className="text-gray-500">
+          최근 30일 테이블별 평균 체류 시간 (분) · 5분 이내 자리비움은 동일 세션으로 병합
+        </CardDescription>
       </CardHeader>
       <CardContent>
         {loading ? <LoadingState /> : data.length === 0 ? <EmptyState /> : (
-          <ChartContainer config={chartConfig} className="h-[280px] w-full">
-            <PieChart>
-              <ChartTooltip content={<ChartTooltipContent formatter={(v, n) => [`${v}%`, n]} />} />
-              <Pie data={data} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={2} dataKey="value" nameKey="name" strokeWidth={0}>
-                {data.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={entry.color} />
-                ))}
-              </Pie>
-              <ChartLegend content={<ChartLegendContent nameKey="name" />} />
-            </PieChart>
+          <ChartContainer config={stayConfig} className="h-[280px] w-full">
+            <BarChart data={formatted} layout="vertical" margin={{ left: 16 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" horizontal={false} />
+              <XAxis
+                type="number"
+                tick={{ fill: "#6b7280", fontSize: 11 }}
+                axisLine={{ stroke: "#e5e7eb" }} tickLine={false}
+                tickFormatter={v => `${v}분`}
+              />
+              <YAxis
+                dataKey="label" type="category"
+                tick={{ fill: "#6b7280", fontSize: 11 }}
+                axisLine={{ stroke: "#e5e7eb" }} tickLine={false}
+                width={80}
+              />
+              <ChartTooltip
+                content={<ChartTooltipContent
+                  formatter={(v, _, props) => [
+                    `평균 ${v}분 (최대 ${props.payload?.maxMinutes}분 · ${props.payload?.sessionCount}세션)`,
+                    ""
+                  ]}
+                />}
+              />
+              <Bar dataKey="avgMinutes" fill="#8b5cf6" radius={[0, 4, 4, 0]} />
+            </BarChart>
           </ChartContainer>
         )}
       </CardContent>
