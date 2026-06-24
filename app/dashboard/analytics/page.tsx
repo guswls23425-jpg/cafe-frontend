@@ -179,19 +179,25 @@ export default function AnalyticsPage() {
     if (stored) setCafeName(stored)
   }, [])
 
-  // 자정이 넘으면 today 갱신 → 날씨·데이터 자동 재조회
+  // 자정까지 남은 시간 계산 후 정확히 자정에 today 갱신
   useEffect(() => {
-    const timer = setInterval(() => {
-      const newToday = getToday()
-      setToday(prev => {
-        if (prev !== newToday) {
-          setSelectedDate(newToday) // 날짜 선택도 오늘로 초기화
-          return newToday
-        }
-        return prev
-      })
-    }, 60_000) // 1분마다 확인
-    return () => clearInterval(timer)
+    let timer: ReturnType<typeof setTimeout>
+
+    const scheduleNextMidnight = () => {
+      const now = Date.now()
+      const midnight = new Date().setHours(24, 0, 0, 0) // 오늘 자정 ms
+      const msToMidnight = midnight - now
+
+      timer = setTimeout(() => {
+        const newToday = getToday()
+        setToday(newToday)
+        setSelectedDate(newToday)
+        scheduleNextMidnight() // 다음 자정 예약
+      }, msToMidnight)
+    }
+
+    scheduleNextMidnight()
+    return () => clearTimeout(timer)
   }, [])
 
   useEffect(() => {
