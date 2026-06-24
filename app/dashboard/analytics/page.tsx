@@ -160,9 +160,13 @@ interface FloorSummary {
   seatCount: number
 }
 
+function getToday() {
+  return new Date().toISOString().slice(0, 10)
+}
+
 export default function AnalyticsPage() {
-  const today = new Date().toISOString().slice(0, 10)
-  const [selectedDate, setSelectedDate] = useState(today)
+  const [today, setToday] = useState(getToday)
+  const [selectedDate, setSelectedDate] = useState(getToday)
   const [weather, setWeather] = useState<WeatherLog | null>(null)
   const [seats, setSeats] = useState<SeatOccupancy[]>([])
   const [cafeName, setCafeName] = useState("")
@@ -173,6 +177,21 @@ export default function AnalyticsPage() {
   useEffect(() => {
     const stored = localStorage.getItem("cafeName")
     if (stored) setCafeName(stored)
+  }, [])
+
+  // 자정이 넘으면 today 갱신 → 날씨·데이터 자동 재조회
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const newToday = getToday()
+      setToday(prev => {
+        if (prev !== newToday) {
+          setSelectedDate(newToday) // 날짜 선택도 오늘로 초기화
+          return newToday
+        }
+        return prev
+      })
+    }, 60_000) // 1분마다 확인
+    return () => clearInterval(timer)
   }, [])
 
   useEffect(() => {
