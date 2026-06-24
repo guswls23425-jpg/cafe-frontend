@@ -1,6 +1,9 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import { Users, Armchair, Clock, AlertTriangle } from "lucide-react"
+
+const STORAGE_KEY = "header-stats-cache"
 
 interface StatCardProps {
   title: string
@@ -44,32 +47,56 @@ interface HeaderStatsProps {
   warningCount?: number
 }
 
-export function HeaderStats({ totalSeats = 0, activeCount = 0, awayCount = 0, warningCount = 0 }: HeaderStatsProps) {
-  const occupancyRate = totalSeats > 0 ? Math.round((activeCount / totalSeats) * 100) : 0
+export function HeaderStats({ totalSeats, activeCount, awayCount, warningCount }: HeaderStatsProps) {
+  const [stats, setStats] = useState({ totalSeats: 0, activeCount: 0, awayCount: 0, warningCount: 0 })
+
+  // 마운트 시 캐시 복원
+  useEffect(() => {
+    try {
+      const cached = localStorage.getItem(STORAGE_KEY)
+      if (cached) setStats(JSON.parse(cached))
+    } catch {}
+  }, [])
+
+  // 실제 값이 들어오면 상태 갱신 + 저장
+  useEffect(() => {
+    if (totalSeats === undefined) return
+    const next = {
+      totalSeats:   totalSeats   ?? 0,
+      activeCount:  activeCount  ?? 0,
+      awayCount:    awayCount    ?? 0,
+      warningCount: warningCount ?? 0,
+    }
+    setStats(next)
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)) } catch {}
+  }, [totalSeats, activeCount, awayCount, warningCount])
+
+  const { totalSeats: ts, activeCount: ac, awayCount: aw, warningCount: wc } = stats
+  const occupancyRate = ts > 0 ? Math.round((ac / ts) * 100) : 0
 
   return (
     <header className="border-b border-gray-200 bg-white px-6 py-4">
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         <StatCard
           title="전체 좌석"
-          value={String(totalSeats)}
+          value={String(ts)}
           icon={<Armchair className="h-5 w-5" />}
         />
         <StatCard
           title="현재 점유율"
-          value={`${occupancyRate}% (${activeCount}/${totalSeats})`}
+          value={`${occupancyRate}% (${ac}/${ts})`}
           icon={<Users className="h-5 w-5" />}
           accent="green"
         />
         <StatCard
           title="자리비움"
-          value={String(awayCount)}
+          value={String(aw)}
           icon={<Clock className="h-5 w-5" />}
           accent="yellow"
         />
         <StatCard
           title="청소·경고"
-          value={String(warningCount)}
+          value={String(wc)}
           icon={<AlertTriangle className="h-5 w-5" />}
           accent="red"
         />
