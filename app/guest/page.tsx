@@ -397,15 +397,18 @@ export default function GuestPage() {
           })
         }
 
-        setFloors(prev => prev.map(f => ({
-          ...f,
-          tables: f.tables.map(t => {
-            const live = statusMap.get(t.name)
-            if (!live) return t
-            if (live.status === t.status && live.awayTime === t.awayTime && live.personCount === t.personCount) return t
-            return { ...t, status: live.status, awayTime: live.awayTime, personCount: live.personCount }
-          }),
-        })))
+        setFloors(prev => prev.map(f => {
+          if (f.id !== event.floorId) return f
+          return {
+            ...f,
+            tables: f.tables.map(t => {
+              const live = statusMap.get(t.name)
+              if (!live) return t
+              if (live.status === t.status && live.awayTime === t.awayTime && live.personCount === t.personCount) return t
+              return { ...t, status: live.status, awayTime: live.awayTime, personCount: live.personCount }
+            }),
+          }
+        }))
       } catch {}
     })
 

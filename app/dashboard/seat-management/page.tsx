@@ -1086,11 +1086,12 @@ export default function SeatManagementPage() {
   // ── [3] SSE 실시간 수신 (AI 업데이트 즉시 반영) ──────────────────────────
   // AI → 백엔드 DB 저장 → SSE push → 여기서 수신
   const applyStatusMap = useCallback(
-    (statusMap: Map<string, { status: TableStatus; awayTime?: string; personCount: number }>) => {
-      // 이벤트 로그 기록 (상태가 바뀐 것만)
+    (statusMap: Map<string, { status: TableStatus; awayTime?: string; personCount: number }>, targetFloorId: number) => {
+      // 이벤트 로그 기록 (상태가 바뀐 것만, 해당 층만)
       const now = new Date().toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })
       const changes: EventItem[] = []
       for (const f of floorsRef.current) {
+        if (f.id !== targetFloorId) continue
         for (const t of f.tables) {
           const live = statusMap.get(t.name)
           if (!live) continue
@@ -1103,10 +1104,11 @@ export default function SeatManagementPage() {
       }
       if (changes.length > 0) setEventLog(prev => [...changes, ...prev].slice(0, 30))
 
-      // 값이 바뀐 경우에만 새 객체 생성 → memo 유효, 불필요한 리렌더 방지
+      // 해당 floorId 층만 업데이트
       setFloors(prev => {
         let anyFloorChanged = false
         const next = prev.map(f => {
+          if (f.id !== targetFloorId) return f
           let tableChanged = false
           const tables = f.tables.map(t => {
             const live = statusMap.get(t.name)
@@ -1152,7 +1154,7 @@ export default function SeatManagementPage() {
             personCount: seat.personCount ?? 0,
           })
         }
-        applyStatusMap(statusMap)
+        applyStatusMap(statusMap, event.floorId)
       } catch { /* 파싱 오류 무시 */ }
     })
 
