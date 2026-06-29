@@ -11,6 +11,9 @@ export default function SystemSettingsPage() {
   const [kakaoConnected, setKakaoConnected] = useState<boolean | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [isDisconnecting, setIsDisconnecting] = useState(false)
+  const [cleaningAlert, setCleaningAlert] = useState(true)
+  const [unpaidAlert, setUnpaidAlert] = useState(true)
+  const [savingAlert, setSavingAlert] = useState(false)
 
   useEffect(() => {
     const stored = localStorage.getItem("cafeName")
@@ -29,6 +32,10 @@ export default function SystemSettingsPage() {
       .then(r => r.json())
       .then(d => setKakaoConnected(d.connected))
       .catch(() => setKakaoConnected(false))
+    fetch(`http://34.64.58.23:8080/api/kakao/notification-setting?cafeName=${encodeURIComponent(cafeName)}`)
+      .then(r => r.json())
+      .then(d => { setCleaningAlert(d.cleaningAlert); setUnpaidAlert(d.unpaidAlert) })
+      .catch(() => {})
   }, [cafeName])
 
   const handleKakaoLogin = async () => {
@@ -37,6 +44,21 @@ export default function SystemSettingsPage() {
     const res = await fetch(`http://34.64.58.23:8080/api/kakao/login-url?cafeName=${encodeURIComponent(cafeName)}`)
     const data = await res.json()
     window.location.href = data.url
+  }
+
+  const handleSaveAlertSettings = async () => {
+    if (!cafeName) return
+    setSavingAlert(true)
+    try {
+      await fetch(
+        `http://34.64.58.23:8080/api/kakao/notification-setting?cafeName=${encodeURIComponent(cafeName)}&cleaningAlert=${cleaningAlert}&unpaidAlert=${unpaidAlert}`,
+        { method: "POST" }
+      )
+    } catch {
+      alert("설정 저장 중 오류가 발생했습니다.")
+    } finally {
+      setSavingAlert(false)
+    }
   }
 
   const handleKakaoDisconnect = async () => {
@@ -97,6 +119,42 @@ export default function SystemSettingsPage() {
             <p className="mt-3 text-xs text-gray-400">
               연동 후 테이블 상태 변경 시 카카오톡으로 알림을 받을 수 있습니다.
             </p>
+
+            {/* 알림 설정 토글 */}
+            <div className="mt-4 border-t border-gray-100 pt-4 space-y-3">
+              <p className="text-xs font-medium text-gray-600">알림 수신 설정</p>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-700">🧹 청소 필요 알림</p>
+                  <p className="text-xs text-gray-400">테이블이 청소 상태로 변경될 때 알림</p>
+                </div>
+                <button
+                  onClick={() => setCleaningAlert(v => !v)}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${cleaningAlert ? "bg-yellow-400" : "bg-gray-200"}`}
+                >
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${cleaningAlert ? "translate-x-6" : "translate-x-1"}`} />
+                </button>
+              </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-700">⚠️ 미주문 고객 알림</p>
+                  <p className="text-xs text-gray-400">자리비움(미주문 의심) 상태로 변경될 때 알림</p>
+                </div>
+                <button
+                  onClick={() => setUnpaidAlert(v => !v)}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${unpaidAlert ? "bg-yellow-400" : "bg-gray-200"}`}
+                >
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${unpaidAlert ? "translate-x-6" : "translate-x-1"}`} />
+                </button>
+              </div>
+              <button
+                onClick={handleSaveAlertSettings}
+                disabled={savingAlert}
+                className="mt-2 rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-700 disabled:opacity-60"
+              >
+                {savingAlert ? "저장 중..." : "설정 저장"}
+              </button>
+            </div>
           </div>
         </main>
       </div>
