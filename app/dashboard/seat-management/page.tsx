@@ -1753,14 +1753,12 @@ export default function SeatManagementPage() {
               <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
                 <div className="mb-3 flex items-center justify-between">
                   <h3 className="text-sm font-medium text-gray-900">실시간 좌석 활동 로그</h3>
-                  {eventLog.length > 0 && (
-                    <button
-                      onClick={() => setEventLog([])}
-                      className="text-xs text-gray-400 hover:text-gray-600"
-                    >
-                      초기화
-                    </button>
-                  )}
+                  <button
+                    onClick={() => setEventLog([])}
+                    className={`text-xs text-gray-400 hover:text-gray-600 transition-opacity ${eventLog.length > 0 ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+                  >
+                    초기화
+                  </button>
                 </div>
                 <ScrollArea className="h-[280px] rounded-lg border border-gray-200 bg-gray-50 p-3">
                   <div className="space-y-3">

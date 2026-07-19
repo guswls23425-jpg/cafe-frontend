@@ -1,13 +1,21 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Coffee, Mail, Lock, Eye, EyeOff, User, Building2, ArrowRight, Check, X } from "lucide-react"
+import { Coffee, Mail, Lock, Eye, EyeOff, User, Building2, ArrowRight, Check, X, MapPin } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+
+declare global {
+  interface Window {
+    daum: {
+      Postcode: new (options: { oncomplete: (data: { roadAddress: string; jibunAddress: string }) => void }) => { open: () => void }
+    }
+  }
+}
 
 export default function SignupPage() {
   const router = useRouter()
@@ -17,9 +25,19 @@ export default function SignupPage() {
     name: "",
     email: "",
     cafeName: "",
+    address: "",
+    addressDetail: "",
     password: "",
     confirmPassword: "",
   })
+
+  useEffect(() => {
+    const script = document.createElement("script")
+    script.src = "//t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"
+    script.async = true
+    document.head.appendChild(script)
+    return () => { document.head.removeChild(script) }
+  }, [])
   const [isLoading, setIsLoading] = useState(false)
   const [agreeTerms, setAgreeTerms] = useState(false)
 
@@ -42,9 +60,10 @@ export default function SignupPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          userName: formData.name, // 프론트의 name을 백엔드의 userName으로 매칭
+          userName: formData.name,
           email: formData.email,
           cafeName: formData.cafeName,
+          address: formData.address + (formData.addressDetail ? " " + formData.addressDetail : ""),
           password: formData.password
         }),
       })
@@ -73,6 +92,15 @@ export default function SignupPage() {
     if (e.target === e.currentTarget) {
       handleClose()
     }
+  }
+
+  const handleAddressSearch = () => {
+    if (!window.daum?.Postcode) { alert("주소 검색 서비스를 불러오는 중입니다. 잠시 후 다시 시도해주세요."); return }
+    new window.daum.Postcode({
+      oncomplete: (data) => {
+        setFormData(prev => ({ ...prev, address: data.roadAddress || data.jibunAddress, addressDetail: "" }))
+      }
+    }).open()
   }
 
   const passwordRequirements = [
@@ -170,6 +198,36 @@ export default function SignupPage() {
                   required
                 />
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-sm text-gray-700">카페 주소 (도로명)</Label>
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <MapPin className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                  <Input
+                    type="text"
+                    placeholder="주소 검색 버튼을 클릭하세요"
+                    value={formData.address}
+                    readOnly
+                    className="border-gray-300 bg-gray-50 pl-10 text-gray-900 placeholder:text-gray-400 cursor-pointer"
+                    onClick={handleAddressSearch}
+                    required
+                  />
+                </div>
+                <Button type="button" variant="outline" onClick={handleAddressSearch} className="shrink-0 border-gray-300 text-gray-600 hover:bg-gray-100">
+                  검색
+                </Button>
+              </div>
+              {formData.address && (
+                <Input
+                  type="text"
+                  placeholder="상세주소 입력 (동, 호수 등)"
+                  value={formData.addressDetail}
+                  onChange={(e) => setFormData({ ...formData, addressDetail: e.target.value })}
+                  className="border-gray-300 bg-gray-50 text-gray-900 placeholder:text-gray-400"
+                />
+              )}
             </div>
 
             <div className="space-y-2">
