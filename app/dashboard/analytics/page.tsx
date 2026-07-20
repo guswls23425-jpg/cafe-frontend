@@ -402,6 +402,7 @@ export default function AnalyticsPage() {
 
             {/* AI 인사이트 */}
             <SmartInsightCard cafeName={cafeName} />
+
           </section>
 
         </div>

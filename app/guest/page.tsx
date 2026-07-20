@@ -337,7 +337,9 @@ export default function GuestPage() {
 
   // ── 초기 로딩 ───────────────────────────────────────────────────────────
   useEffect(() => {
+    // 마커에서 직접 넘어온 경우(sessionStorage에 값 있음)만 자동 입장
     const storedCafeName = sessionStorage.getItem("guestCafeName")
+    sessionStorage.removeItem("guestCafeName") // 읽은 즉시 삭제 → 뒤로가기 후 재진입 시 입력창 표시
     if (!storedCafeName) { setShowInput(true); setIsLoading(false); return }
     setCafeName(storedCafeName)
 
@@ -499,7 +501,7 @@ export default function GuestPage() {
       <header className="sticky top-0 z-50 border-b border-gray-200 bg-white/80 backdrop-blur-sm">
         <div className="mx-auto flex h-16 max-w-5xl items-center justify-between px-4">
           <div className="flex items-center gap-3">
-            <Link href="/">
+            <Link href="/" onClick={() => sessionStorage.removeItem("guestCafeName")}>
               <Button variant="ghost" size="icon" className="text-gray-500 hover:bg-gray-100 hover:text-gray-900">
                 <ArrowLeft className="h-5 w-5" />
               </Button>

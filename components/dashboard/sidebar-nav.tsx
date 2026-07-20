@@ -9,6 +9,7 @@ import {
   Coffee,
   LogOut,
   Video,
+  Sparkles,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -22,6 +23,11 @@ const navItems = [
     title: "분석 및 인사이트",
     href: "/dashboard/analytics",
     icon: BarChart3,
+  },
+  {
+    title: "AI 트렌드",
+    href: "/dashboard/trend",
+    icon: Sparkles,
   },
   {
     title: "비디오",

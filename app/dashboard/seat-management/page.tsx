@@ -859,13 +859,16 @@ export default function SeatManagementPage() {
 
   // 실시간 이벤트 로그
   const EVENT_LOG_KEY = "cafemonitor-event-log"
-  const [eventLog, setEventLog] = useState<EventItem[]>(() => {
-    if (typeof window === "undefined") return []
+  const [eventLog, setEventLog] = useState<EventItem[]>([])
+  const eventLogLoadedRef = useRef(false)
+
+  useEffect(() => {
     try {
       const raw = localStorage.getItem(EVENT_LOG_KEY)
-      return raw ? JSON.parse(raw) : []
-    } catch { return [] }
-  })
+      if (raw) setEventLog(JSON.parse(raw))
+    } catch {}
+    eventLogLoadedRef.current = true
+  }, [])
 
   // 폴링용 floors ref (stale closure 방지)
   const floorsRef = useRef<FloorData[]>([])
@@ -933,8 +936,9 @@ export default function SeatManagementPage() {
     } catch {}
   }, [floors, activeFloorId, nextFloorId])
 
-  // eventLog가 변경될 때마다 localStorage에 저장
+  // eventLog가 변경될 때마다 localStorage에 저장 (초기 로드 완료 후에만)
   useEffect(() => {
+    if (!eventLogLoadedRef.current) return
     try {
       localStorage.setItem(EVENT_LOG_KEY, JSON.stringify(eventLog))
     } catch {}

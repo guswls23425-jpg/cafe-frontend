@@ -48,6 +48,7 @@ export default function HomePage() {
   const mapInstanceRef = useRef<KakaoMap | null>(null)
   const [cafeLocations, setCafeLocations] = useState<CafeLocation[]>([])
   const [mapReady, setMapReady] = useState(false)
+  const [mapInitialized, setMapInitialized] = useState(false)
   const [locationDenied, setLocationDenied] = useState(false)
 
   // 카페 위치 데이터 fetch
@@ -71,9 +72,9 @@ export default function HomePage() {
     document.head.appendChild(script)
   }, [])
 
-  // 지도 초기화
+  // 지도 초기화 (한 번만)
   useEffect(() => {
-    if (!mapReady || !mapRef.current) return
+    if (!mapReady || !mapRef.current || mapInstanceRef.current) return
 
     const initMap = (lat: number, lng: number) => {
       const map = new window.kakao.maps.Map(mapRef.current!, {
@@ -81,38 +82,51 @@ export default function HomePage() {
         level: 5,
       })
       mapInstanceRef.current = map
-
-      // 카페 마커 표시
-      cafeLocations.forEach(cafe => {
-        const marker = new window.kakao.maps.Marker({
-          map,
-          position: new window.kakao.maps.LatLng(cafe.lat, cafe.lng),
-          title: cafe.cafeName,
-        })
-
-        const infowindow = new window.kakao.maps.InfoWindow({
-          content: `<div style="padding:8px 12px;font-size:13px;font-weight:600;color:#111;border-radius:8px;max-width:200px;">
-            <div style="color:#059669;margin-bottom:2px">☕ ${cafe.cafeName}</div>
-            <div style="font-size:11px;color:#6b7280;font-weight:400">${cafe.address}</div>
-          </div>`,
-        })
-
-        window.kakao.maps.event.addListener(marker, "click", () => {
-          infowindow.open(map, marker)
-        })
-      })
+      setMapInitialized(true)
     }
 
-    // 현재 위치 기반 초기화
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         pos => initMap(pos.coords.latitude, pos.coords.longitude),
-        () => { setLocationDenied(true); initMap(37.5665, 126.978) } // 거부 시 서울 중심
+        () => { setLocationDenied(true); initMap(37.5665, 126.978) }
       )
     } else {
       initMap(37.5665, 126.978)
     }
-  }, [mapReady, cafeLocations])
+  }, [mapReady])
+
+  // 마커 표시 (지도 + 카페 데이터 모두 준비되면)
+  useEffect(() => {
+    const map = mapInstanceRef.current
+    if (!map || cafeLocations.length === 0) return
+
+    cafeLocations.forEach(cafe => {
+      const marker = new window.kakao.maps.Marker({
+        map,
+        position: new window.kakao.maps.LatLng(cafe.lat, cafe.lng),
+        title: cafe.cafeName,
+      })
+
+      const infowindow = new window.kakao.maps.InfoWindow({
+        content: `<div style="padding:10px 14px;font-size:13px;border-radius:8px;max-width:220px;line-height:1.5;">
+          <div style="font-weight:700;color:#059669;margin-bottom:2px">☕ ${cafe.cafeName}</div>
+          <div style="font-size:11px;color:#6b7280;margin-bottom:8px">${cafe.address}</div>
+          <button onclick="sessionStorage.setItem('guestCafeName','${cafe.cafeName}');location.href='/guest'"
+            style="width:100%;padding:6px 0;background:#059669;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;">
+            카페 좌석 확인
+          </button>
+        </div>`,
+      })
+
+      window.kakao.maps.event.addListener(marker, "click", () => {
+        infowindow.open(map, marker)
+      })
+
+      window.kakao.maps.event.addListener(map, "click", () => {
+        infowindow.close()
+      })
+    })
+  }, [mapInitialized, cafeLocations])
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -149,8 +163,8 @@ export default function HomePage() {
       </header>
 
       {/* 히어로 — 지도 위 중앙 카드 */}
-      <main className="relative z-10 flex flex-1 flex-col items-center justify-center px-4 py-20">
-        <div className="w-full max-w-lg rounded-2xl bg-white/90 p-10 shadow-2xl backdrop-blur-md text-center">
+      <main className="relative z-10 flex flex-1 flex-col items-center justify-center px-4 py-20 pointer-events-none">
+        <div className="w-full max-w-lg rounded-2xl bg-white/90 p-10 shadow-2xl backdrop-blur-md text-center pointer-events-auto">
           <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-4 py-1.5 text-sm text-emerald-600">
             <Zap className="h-4 w-4" />
             실시간 AI 기반 좌석 모니터링
@@ -174,7 +188,7 @@ export default function HomePage() {
           <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
             <Link href="/guest">
               <Button size="lg" className="w-full sm:w-auto bg-emerald-600 px-8 text-white hover:bg-emerald-700">
-                손님모드로 접속
+                카페 좌석 현황 검색
               </Button>
             </Link>
             <Link href="/login">
@@ -186,31 +200,31 @@ export default function HomePage() {
         </div>
 
         {/* 스크롤 유도 */}
-        <div className="mt-8 animate-bounce text-white/80">
+        <div className="mt-8 animate-bounce text-white/80 pointer-events-none">
           <ChevronDown className="h-6 w-6 drop-shadow" />
         </div>
       </main>
 
       {/* 기능 섹션 */}
-      <section className="relative z-10 bg-white/90 backdrop-blur-md py-16 px-6">
+      <section className="relative z-10 py-16 px-6 pointer-events-none">
         <div className="mx-auto max-w-6xl">
-          <h2 className="mb-12 text-center text-2xl font-bold text-gray-900 md:text-3xl">주요 기능</h2>
+          <h2 className="mb-12 text-center text-2xl font-bold text-white drop-shadow md:text-3xl">주요 기능</h2>
           <div className="grid gap-6 md:grid-cols-3">
-            <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+            <div className="rounded-xl border border-white/40 bg-white/75 p-6 shadow-sm backdrop-blur-md pointer-events-auto">
               <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-emerald-500/10">
                 <BarChart3 className="h-6 w-6 text-emerald-500" />
               </div>
               <h3 className="mb-2 text-lg font-semibold text-gray-900">실시간 대시보드</h3>
               <p className="text-sm text-gray-500">모든 좌석의 현황을 한눈에 파악하고, 시간대별 점유율 통계를 확인하세요.</p>
             </div>
-            <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+            <div className="rounded-xl border border-white/40 bg-white/75 p-6 shadow-sm backdrop-blur-md pointer-events-auto">
               <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-amber-500/10">
                 <Bell className="h-6 w-6 text-amber-500" />
               </div>
               <h3 className="mb-2 text-lg font-semibold text-gray-900">스마트 알림</h3>
               <p className="text-sm text-gray-500">자리비움 시간 초과 시 카카오톡으로 즉시 알림을 받아보세요.</p>
             </div>
-            <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+            <div className="rounded-xl border border-white/40 bg-white/75 p-6 shadow-sm backdrop-blur-md pointer-events-auto">
               <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-blue-500/10">
                 <Shield className="h-6 w-6 text-blue-500" />
               </div>
@@ -222,14 +236,14 @@ export default function HomePage() {
       </section>
 
       {/* 푸터 */}
-      <footer className="relative z-10 border-t border-gray-200 bg-white/90 backdrop-blur-md">
+      <footer className="relative z-10 border-t border-white/20 bg-black/30 backdrop-blur-sm">
         <div className="mx-auto max-w-6xl px-6 py-8">
           <div className="flex flex-col items-center justify-between gap-4 sm:flex-row">
             <div className="flex items-center gap-2">
               <Coffee className="h-5 w-5 text-emerald-500" />
               <span className="text-sm font-medium text-gray-900">카페모니터</span>
             </div>
-            <p className="text-sm text-gray-400">© 2026 카페모니터. All rights reserved.</p>
+            <p className="text-sm text-white/60">© 2026 카페모니터. All rights reserved.</p>
           </div>
         </div>
       </footer>
