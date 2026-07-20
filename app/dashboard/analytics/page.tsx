@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useState, useEffect } from "react"
 import { SidebarNav } from "@/components/dashboard/sidebar-nav"
@@ -13,7 +13,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Cloud, Droplets, Wind, Thermometer, CalendarDays, BarChart2, Lightbulb } from "lucide-react"
 
-const BACKEND = "http://34.64.58.23:8080"
+const BACKEND = "https://cafe-monitor.duckdns.org"
 
 // ── 타입 ──────────────────────────────────────────────────────────────────
 interface WeatherLog {

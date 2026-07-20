@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
@@ -28,11 +28,11 @@ export default function SystemSettingsPage() {
     if (kakaoResult) {
       window.history.replaceState({}, "", window.location.pathname)
     }
-    fetch(`http://34.64.58.23:8080/api/kakao/status?cafeName=${encodeURIComponent(cafeName)}`)
+    fetch(`https://cafe-monitor.duckdns.org/api/kakao/status?cafeName=${encodeURIComponent(cafeName)}`)
       .then(r => r.json())
       .then(d => setKakaoConnected(d.connected))
       .catch(() => setKakaoConnected(false))
-    fetch(`http://34.64.58.23:8080/api/kakao/notification-setting?cafeName=${encodeURIComponent(cafeName)}`)
+    fetch(`https://cafe-monitor.duckdns.org/api/kakao/notification-setting?cafeName=${encodeURIComponent(cafeName)}`)
       .then(r => r.json())
       .then(d => { setCleaningAlert(d.cleaningAlert); setUnpaidAlert(d.unpaidAlert) })
       .catch(() => {})
@@ -41,7 +41,7 @@ export default function SystemSettingsPage() {
   const handleKakaoLogin = async () => {
     if (!cafeName) return
     setIsLoading(true)
-    const res = await fetch(`http://34.64.58.23:8080/api/kakao/login-url?cafeName=${encodeURIComponent(cafeName)}`)
+    const res = await fetch(`https://cafe-monitor.duckdns.org/api/kakao/login-url?cafeName=${encodeURIComponent(cafeName)}`)
     const data = await res.json()
     window.location.href = data.url
   }
@@ -51,7 +51,7 @@ export default function SystemSettingsPage() {
     setSavingAlert(true)
     try {
       await fetch(
-        `http://34.64.58.23:8080/api/kakao/notification-setting?cafeName=${encodeURIComponent(cafeName)}&cleaningAlert=${cleaningAlert}&unpaidAlert=${unpaidAlert}`,
+        `https://cafe-monitor.duckdns.org/api/kakao/notification-setting?cafeName=${encodeURIComponent(cafeName)}&cleaningAlert=${cleaningAlert}&unpaidAlert=${unpaidAlert}`,
         { method: "POST" }
       )
     } catch {
@@ -65,7 +65,7 @@ export default function SystemSettingsPage() {
     if (!cafeName || !confirm("카카오톡 연동을 해제하시겠습니까?")) return
     setIsDisconnecting(true)
     try {
-      await fetch(`http://34.64.58.23:8080/api/kakao/disconnect?cafeName=${encodeURIComponent(cafeName)}`, { method: "DELETE" })
+      await fetch(`https://cafe-monitor.duckdns.org/api/kakao/disconnect?cafeName=${encodeURIComponent(cafeName)}`, { method: "DELETE" })
       setKakaoConnected(false)
     } catch {
       alert("연동 해제 중 오류가 발생했습니다.")

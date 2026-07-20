@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useEffect, useRef, useState } from "react"
 import { Coffee, ArrowLeft, Store, ArrowRight, Loader2, Building2 } from "lucide-react"
@@ -285,7 +285,7 @@ function groupSeatsByFloor(seats: TableData[]): FloorData[] {
 async function fetchFloorsFromServer(cafeName: string): Promise<FloorData[] | null> {
   try {
     const res = await fetch(
-      `http://34.64.58.23:8080/api/seats/floors?cafeName=${encodeURIComponent(cafeName)}`
+      `https://cafe-monitor.duckdns.org/api/seats/floors?cafeName=${encodeURIComponent(cafeName)}`
     )
     if (res.ok) {
       const data: Array<{
@@ -306,7 +306,7 @@ async function fetchFloorsFromServer(cafeName: string): Promise<FloorData[] | nu
   // 폴백: search API (overlay 없음)
   try {
     const res = await fetch(
-      `http://34.64.58.23:8080/api/seats/search?cafeName=${encodeURIComponent(cafeName)}`
+      `https://cafe-monitor.duckdns.org/api/seats/search?cafeName=${encodeURIComponent(cafeName)}`
     )
     if (res.ok) {
       const seats: TableData[] = await res.json()
@@ -379,7 +379,7 @@ export default function GuestPage() {
   // ── SSE 실시간 수신 ──────────────────────────────────────────────────────
   useEffect(() => {
     if (!cafeName || isLoading) return
-    const es = new EventSource(`http://34.64.58.23:8080/api/seats/stream`)
+    const es = new EventSource(`https://cafe-monitor.duckdns.org/api/seats/stream`)
 
     es.addEventListener("seat-update", (e: MessageEvent) => {
       try {

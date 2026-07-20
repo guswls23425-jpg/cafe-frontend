@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useState, useEffect, useCallback } from "react"
 import { Camera, Save, X, Link2, MessageSquare, Bell, RefreshCw } from "lucide-react"
@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Slider } from "@/components/ui/slider"
 
 
-const BACKEND_URL = "http://34.64.58.23:8080"
+const BACKEND_URL = "https://cafe-monitor.duckdns.org"
 
 function CameraFeed({ sourceId, index }: { sourceId: string; index: number }) {
   const [streamUrl, setStreamUrl] = useState<string | null>(null)

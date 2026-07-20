@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useState, useRef, memo, useCallback, useEffect, useMemo } from "react"
 import { useRouter } from "next/navigation"
@@ -969,7 +969,7 @@ export default function SeatManagementPage() {
         return
       }
       try {
-        const response = await fetch(`http://34.64.58.23:8080/api/auth/${storedOwnerId}/cafe-name`)
+        const response = await fetch(`https://cafe-monitor.duckdns.org/api/auth/${storedOwnerId}/cafe-name`)
         if (response.ok) {
           const name = await response.text()
           setCafeName(name.replace(/^"|"$/g, "").trim())
@@ -998,7 +998,7 @@ export default function SeatManagementPage() {
 
         // 신규 floors API 시도
         const floorsRes = await fetch(
-          `http://34.64.58.23:8080/api/seats/floors?cafeName=${encodeURIComponent(cafeName)}`
+          `https://cafe-monitor.duckdns.org/api/seats/floors?cafeName=${encodeURIComponent(cafeName)}`
         )
         if (floorsRes.ok) {
           const data: Array<{ floorNumber: number; label: string; seats: TableData[]; restrooms?: RestroomMarker[]; windows?: WindowMarker[] }> = await floorsRes.json()
@@ -1028,7 +1028,7 @@ export default function SeatManagementPage() {
 
         // floors API 실패 or 서버에 데이터 없음 → 구 search API 폴백
         const searchRes = await fetch(
-          `http://34.64.58.23:8080/api/seats/search?cafeName=${encodeURIComponent(cafeName)}`
+          `https://cafe-monitor.duckdns.org/api/seats/search?cafeName=${encodeURIComponent(cafeName)}`
         )
         if (searchRes.ok) {
           const seats: TableData[] = await searchRes.json()
@@ -1136,7 +1136,7 @@ export default function SeatManagementPage() {
     if (!cafeName || isLoading) return
 
     const es = new EventSource(
-      `http://34.64.58.23:8080/api/seats/stream`
+      `https://cafe-monitor.duckdns.org/api/seats/stream`
     )
 
     es.addEventListener("seat-update", (e: MessageEvent) => {
@@ -1199,7 +1199,7 @@ export default function SeatManagementPage() {
       // 신규 floors/save 시도
       let saved = false
       const floorsRes = await fetch(
-        `http://34.64.58.23:8080/api/seats/floors/save?cafeName=${encodeURIComponent(cafeName)}`,
+        `https://cafe-monitor.duckdns.org/api/seats/floors/save?cafeName=${encodeURIComponent(cafeName)}`,
         { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }
       )
       if (floorsRes.ok) { saved = true }
@@ -1210,7 +1210,7 @@ export default function SeatManagementPage() {
           toLayoutOnly(f.tables).map(t => ({ ...t, floorNumber: f.id }))
         )
         const fallbackRes = await fetch(
-          `http://34.64.58.23:8080/api/seats/save?cafeName=${encodeURIComponent(cafeName)}`,
+          `https://cafe-monitor.duckdns.org/api/seats/save?cafeName=${encodeURIComponent(cafeName)}`,
           { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(allSeats) }
         )
         if (fallbackRes.ok) saved = true
@@ -1251,7 +1251,7 @@ export default function SeatManagementPage() {
     }))
     try {
       const res = await fetch(
-        `http://34.64.58.23:8080/api/seats/floors/save?cafeName=${encodeURIComponent(cafeName)}`,
+        `https://cafe-monitor.duckdns.org/api/seats/floors/save?cafeName=${encodeURIComponent(cafeName)}`,
         { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }
       )
       if (!res.ok) {
@@ -1259,7 +1259,7 @@ export default function SeatManagementPage() {
           toLayoutOnly(f.tables).map(t => ({ ...t, floorNumber: f.id }))
         )
         await fetch(
-          `http://34.64.58.23:8080/api/seats/save?cafeName=${encodeURIComponent(cafeName)}`,
+          `https://cafe-monitor.duckdns.org/api/seats/save?cafeName=${encodeURIComponent(cafeName)}`,
           { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(allSeats) }
         )
       }
@@ -1487,7 +1487,7 @@ export default function SeatManagementPage() {
     setIsLogLoading(true)
     try {
       const res = await fetch(
-        `http://34.64.58.23:8080/api/ai/logs/seat?seatId=${seatId}&date=${date}`
+        `https://cafe-monitor.duckdns.org/api/ai/logs/seat?seatId=${seatId}&date=${date}`
       )
       if (res.ok) {
         const data: AiLog[] = await res.json()

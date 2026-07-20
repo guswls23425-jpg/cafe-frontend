@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
@@ -6,7 +6,7 @@ import { Coffee, Shield, BarChart3, Bell, Zap, MapPin, ChevronDown } from "lucid
 import { Button } from "@/components/ui/button"
 
 const KAKAO_JS_KEY = "06a819d38eb8027717af114f7e625c12"
-const BACKEND = "http://34.64.58.23:8080"
+const BACKEND = "https://cafe-monitor.duckdns.org"
 
 declare global {
   interface Window {

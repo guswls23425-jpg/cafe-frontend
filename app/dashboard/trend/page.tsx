@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useState, useEffect } from "react"
 import { SidebarNav } from "@/components/dashboard/sidebar-nav"
@@ -6,7 +6,7 @@ import { HeaderStats } from "@/components/dashboard/header-stats"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Sparkles, RefreshCw, Flame } from "lucide-react"
 
-const BACKEND = "http://34.64.58.23:8080"
+const BACKEND = "https://cafe-monitor.duckdns.org"
 
 interface TrendIdea {
   emoji: string

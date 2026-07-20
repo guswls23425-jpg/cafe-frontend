@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useState } from "react"
 import Link from "next/link"
@@ -32,7 +32,7 @@ export default function LoginPage() {
 
     try {
       // 스프링 부트 서버로 로그인 요청 쏘기
-      const response = await fetch("http://34.64.58.23:8080/api/auth/login", {
+      const response = await fetch("https://cafe-monitor.duckdns.org/api/auth/login", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

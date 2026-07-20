@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useState, useEffect } from "react"
 import { TrendingUp, Lightbulb, Clock, CalendarDays } from "lucide-react"
@@ -23,7 +23,7 @@ import {
 } from "recharts"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 
-const BACKEND = "http://34.64.58.23:8080"
+const BACKEND = "https://cafe-monitor.duckdns.org"
 
 function useCafeName() {
   const [name, setName] = useState("")

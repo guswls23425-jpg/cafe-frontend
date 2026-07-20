@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { Camera, Save, X, Link2, MessageSquare, Bell } from "lucide-react"
 
 export default function Video_line() {
   // 💡 GCP 서버의 외부 IP로 변경해 주세요. (예: http://34.123.45.67:8080)
-  const BACKEND_URL = "http://34.64.58.23:8080";
+  const BACKEND_URL = "https://cafe-monitor.duckdns.org";
   const [streamUrl, setStreamUrl] = useState(`${BACKEND_URL}/api/video/stream`)
 
   const [hasError, setHasError] = useState(false);

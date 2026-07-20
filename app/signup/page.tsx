@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
@@ -54,7 +54,7 @@ export default function SignupPage() {
     
     try {
       // 2. 스프링 부트 서버로 회원가입 요청 쏘기
-      const response = await fetch("http://34.64.58.23:8080/api/auth/signup", {
+      const response = await fetch("https://cafe-monitor.duckdns.org/api/auth/signup", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
